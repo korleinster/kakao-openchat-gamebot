@@ -23,6 +23,14 @@ SOFTWARE.
 
 
 Adapted Kakao notification transport (MIT)
+Original project: bssm-oss/kakao-talk-auto-bot
+Source: https://github.com/bssm-oss/kakao-talk-auto-bot
+Source commit: a10b27b46984b8b85712bf84bf452596f607f5c7
+Adapted files: NotificationListener.kt -> NotificationBridge.kt;
+SessionManager.kt and SessionReplier.kt -> SessionTransport.kt.
+Modified for explicit pairing, conversation identity checks, recovery and durable dispatch.
+Independent adaptation maintained by korleinster; no upstream endorsement implied.
+
 MIT License
 
 Copyright (c) 2026 kakao-talk-auto-bot contributors

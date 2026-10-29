@@ -2,6 +2,8 @@
 
 A dedicated Android test application for Lineage 2M announcements and lightweight open-chat games.
 
+Independently maintained by [korleinster](https://github.com/korleinster), with selected notification/reply transport portions adapted from [bssm-oss/kakao-talk-auto-bot](https://github.com/bssm-oss/kakao-talk-auto-bot). Credit for those portions belongs to the original kakao-talk-auto-bot contributors.
+
 ## Current scope
 
 Version `0.1.0-test` processes **only the explicitly paired test conversation `봇테스트`**. Named group rooms and the owner's one-to-one open-chat test room have separate admission rules. This is an owner-device prototype, not a general KakaoTalk integration or a production release.
@@ -56,8 +58,14 @@ Background queries and notifications do not require keeping the physical display
 ## Documentation
 
 
-`config/project.json` records planning defaults; the installed app stores its runtime configuration privately on the phone. There is no GitHub remote repository yet.
+`config/project.json` records planning defaults; the installed app stores its runtime configuration privately on the phone. The source repository is [korleinster/kakao-openchat-gamebot](https://github.com/korleinster/kakao-openchat-gamebot).
 
 ## License
 
-Project material is licensed under MIT; see [LICENSE](LICENSE). Notification transport portions are adapted from `bssm-oss/kakao-talk-auto-bot` at the commit pinned in `upstream.lock.json`. Preserve upstream notices. Runtime Kotlin/JetBrains components use Apache-2.0. Full notices are included in the app's license screen and in `licenses/`. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Project material is licensed under the **MIT License**; see [LICENSE](LICENSE). Retain applicable copyright and permission notices when redistributing copies or substantial portions.
+
+- New project code: Copyright (c) 2026 korleinster.
+- Adapted portions: Copyright (c) 2026 kakao-talk-auto-bot contributors, originally MIT-licensed. The exact upstream license is preserved in [licenses/kakao-talk-auto-bot-MIT.txt](licenses/kakao-talk-auto-bot-MIT.txt).
+- Original source: [bssm-oss/kakao-talk-auto-bot at a10b27b46984b8b85712bf84bf452596f607f5c7](https://github.com/bssm-oss/kakao-talk-auto-bot/tree/a10b27b46984b8b85712bf84bf452596f607f5c7). File mappings, original hashes, and modification summaries are in [upstream.lock.json](upstream.lock.json) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+Runtime Kotlin/JetBrains components retain their Apache-2.0 license. Full notices and source attribution are included in the app's license screen and in `licenses/`. This independently maintained project is not an official Kakao or NCSOFT product and is not endorsed by the upstream authors.
