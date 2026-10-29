@@ -17,7 +17,12 @@ class ReplyCapability(val identity: String, val notificationKey: String, val act
 class SessionTransport(private val context: Context) {
     private val capabilities = ConcurrentHashMap<String, ReplyCapability>()
     fun accept(cap: ReplyCapability) { capabilities[cap.identity] = cap }
-    fun sourceRemoved(key: String) { capabilities.values.filter { it.notificationKey == key }.forEach { it.sourcePresent = false } }
+    fun sourceRemoved(key: String): Boolean {
+        val matching = capabilities.values.filter { it.notificationKey == key }
+        matching.forEach { it.sourcePresent = false }
+        return matching.isNotEmpty()
+    }
+    fun sourcePresent(identity: String): Boolean = capabilities[identity]?.sourcePresent == true
     fun clear() = capabilities.clear()
     fun available(identity: String): Boolean = identity.isNotBlank() && capabilities.containsKey(identity)
     fun check(identity: String): String? {
@@ -31,7 +36,7 @@ class SessionTransport(private val context: Context) {
     /** Called only after the durable DISPATCHING marker. A normal return is not a delivery receipt. */
     fun invoke(identity: String, text: String): Boolean {
         val cap = capabilities[identity] ?: return false
-        val inputs = cap.action.remoteInputs ?: return false
+        val inputs = cap.action.remoteInputs?.filterNot { it.isDataOnly }?.toTypedArray() ?: return false
         if (cap.action.actionIntent.creatorPackage != "com.kakao.talk" || inputs.isEmpty()) return false
         val result = Bundle()
         inputs.forEach { result.putCharSequence(it.resultKey, text) }
