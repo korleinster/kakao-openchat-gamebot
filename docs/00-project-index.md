@@ -1,6 +1,6 @@
 리니지2M 오픈채팅 일정 알림과 미니게임 프로젝트. 최종 갱신: <date start="2026-10-29" time-zone="Asia/Seoul" />.
 
-현재 단계: 개발 준비·설계 초안 v0.1. APK 구현·빌드·실기기 전송·운영 적용은 아직 완료되지 않았다.
+현재 단계: Android 시험 앱 0.1.0-test 구현·폰 설치 완료. 단위 검사 15개와 폰 DB 검사 5개 통과. 1:1 시험 방의 답장 4개와 30초 예약 알림을 수신자가 확인했다. 운영 일정·그룹방·장시간 안정성 검증은 남아 있다.
 
 ## 핵심 요구사항
 
@@ -25,9 +25,10 @@ MIT 코드의 필요한 부분만 선별 활용하는 독립 앱을 준비한다
 - <mention url="https://app.notion.com/p/408e60ccff0c81ce9e49f2cf4c5a7018?pvs=204">07 개발 계획·실기기 검증</mention>
 - <mention url="https://app.notion.com/p/408e60ccff0c81d19d00ea5664cddef3?pvs=204">08 결정 사항·미정 항목·변경 이력</mention>
 - <mention url="https://app.notion.com/p/408e60ccff0c81349e76c033c272268b?pvs=204">09 Android 원격 작업 준비·연결 기록</mention>
+- <mention url="https://app.notion.com/p/408e60ccff0c8198a94cd84f56f63b14">10 구현 현황·테스트 기록</mention>
 
 ## 다음 작업
 
-개발 도구·폰 디버깅 연결 준비 → 테스트 오픈채팅에서 텍스트 전송 검증 → 방 구분·연결 복구 → 영속 일정과 5분 전·아침 알림 → 컬렉션·오락 확장.
+기본 개발 도구·1:1 실제 답장·30초 예약 알림 확인 완료. 다음은 실제 일정 자료 등록, 그룹방과 장시간 절전·복구 검증, 기존 봇 읽기 연동, 오락 확장이다.
 
-폰의 최초 디버깅 허용은 사용자 승인을 완료했고 ADB 연결·화면 캡처·스크롤 조작을 확인했다. 테더링에 영향을 줄 수 있는 USB 모드·재부팅 시험은 영향 안내와 허가 후 수행한다. 연결된 GitHub 계정은 korleinster이며 원격 저장소는 아직 만들지 않았다.
+폰의 최초 디버깅 허용은 사용자 승인을 완료했고 ADB 연결·화면 캡처·스크롤 조작을 확인했다. 테더링에 영향을 줄 수 있는 USB 모드·재부팅 시험은 영향 안내와 허가 후 수행한다. 독립 GitHub 저장소는 [korleinster/kakao-openchat-gamebot](https://github.com/korleinster/kakao-openchat-gamebot)이며 사용자가 공개 업로드를 선택했다. MIT를 유지하고 원작자·원본 소스를 별도 고지에 표시한다.

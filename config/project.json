@@ -27,9 +27,10 @@
   },
   "github": {
     "account": "korleinster",
-    "repository_name": null,
-    "visibility": null,
-    "created": false
+    "repository_name": "kakao-openchat-gamebot",
+    "visibility": "public",
+    "created": true,
+    "url": "https://github.com/korleinster/kakao-openchat-gamebot"
   },
   "timing": {
     "pre_event_offset_seconds": 300,

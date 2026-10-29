@@ -54,4 +54,10 @@
 
 현재 명령 응답은 연결된 시험 대화에서 실행 중이며 정기 일정 발송은 OFF다. 실제 월드보스·정기 콘텐츠·컬렉션 자료가 없어 가짜 운영 일정을 등록하지 않았다. 앱을 강제 중지하거나 답장 연결이 사라지면 앱을 열고 새 대상 대화 알림을 받아야 할 수 있다.
 
-설치 APK SHA-256: `9422d86ad919195fc3f11afd70dd276146a87aaccd931e90931c0a0650216d0b`. 첫 앱 구현 커밋: `9753e48` (로컬). GitHub 원격 저장소는 아직 없다.
+설치 APK SHA-256: `9422d86ad919195fc3f11afd70dd276146a87aaccd931e90931c0a0650216d0b`. 첫 앱 구현 커밋: `9753e48`.
+
+## 7. GitHub 공개 준비
+
+사용자가 공개 업로드를 선택해 [korleinster/kakao-openchat-gamebot](https://github.com/korleinster/kakao-openchat-gamebot)을 만들었다. MIT 원문을 유지하고 원작자 저작권, 원본 저장소·커밋·파일별 대응, 독립 수정 내역을 LICENSE·README·THIRD_PARTY_NOTICES.md·앱 고지에 반영했다. 원본 MIT는 기준 파일의 Git blob SHA와 일치한다.
+
+고지 내용을 반영한 APK 빌드와 내부 고지 파일 포함 검사를 통과했다. 새 빌드 SHA-256: `b9032bb3d73f94e5379a6fa933ac3d7dbd500efd2618579507604bd676c77f32`. 이 파일은 로컬 빌드이며 폰 설치본을 교체하거나 GitHub Release로 배포하지 않았다. 공개 대상 추적 파일과 Git 이력에서 주요 인증키 패턴을 검사했고 일치 항목은 없었다.

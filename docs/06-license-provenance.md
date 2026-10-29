@@ -40,9 +40,13 @@ MIT는 사용·복사·수정·병합·출판·배포·재라이선스·판매�
 
 APK 배포 전: 포함 라이선스 원문·필수 NOTICE 유지, 수정 표시가 필요한 파일은 표시, 별도 자산·상표 권리 확인. MIT 코드 사용 허가와 카카오톡 서비스의 비공식 자동화 허용 여부는 별개의 검토 범위다.
 
-## 5. GitHub 준비 상태
+## 5. GitHub 저장소와 표시 방식
 
-연결 계정은 korleinster로 확인했다. 로컬 개발 준비 폴더만 구성하며 원격 저장소 생성·공개·푸시를 완료했다고 표시하지 않는다. 이름·공개 범위가 정해지면 실제 원격 저장소를 연결한다. README는 영어로 유지한다.
+사용자가 공개 업로드를 선택했다. 독립 저장소는 [korleinster/kakao-openchat-gamebot](https://github.com/korleinster/kakao-openchat-gamebot)이며 공개 범위는 public이다. README는 영어로 유지한다.
+
+프로젝트 라이선스는 MIT를 유지한다. 루트 LICENSE에 신규 코드의 korleinster와 선별 수정 부분의 kakao-talk-auto-bot contributors 저작권을 함께 표시했다. 원본 MIT 파일은 기준 커밋과 같은 내용을 보존했다. README·THIRD_PARTY_NOTICES.md·앱 내부 고지에서 원본 저장소, 사용 커밋, 수정 파일의 대응 관계와 변경 목적을 설명한다.
+
+MIT의 필수 조건은 해당 저작권 표시와 허가문 보존이다. 원본 URL 명시 자체가 MIT의 별도 의무인 것은 아니며, 이 프로젝트는 출처 설명을 위해 링크를 추가한다. 별도 조건을 덧붙여 변형한 MIT로 표시하지 않는다. 외부 의존성의 Apache-2.0 고지는 그대로 유지한다.
 
 ## 6. 근거
 
