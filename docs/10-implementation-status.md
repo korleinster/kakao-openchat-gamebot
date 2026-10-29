@@ -56,8 +56,10 @@
 
 설치 APK SHA-256: `9422d86ad919195fc3f11afd70dd276146a87aaccd931e90931c0a0650216d0b`. 첫 앱 구현 커밋: `9753e48`.
 
-## 7. GitHub 공개 준비
+## 7. GitHub 공개 업로드
 
 사용자가 공개 업로드를 선택해 [korleinster/kakao-openchat-gamebot](https://github.com/korleinster/kakao-openchat-gamebot)을 만들었다. MIT 원문을 유지하고 원작자 저작권, 원본 저장소·커밋·파일별 대응, 독립 수정 내역을 LICENSE·README·THIRD_PARTY_NOTICES.md·앱 고지에 반영했다. 원본 MIT는 기준 파일의 Git blob SHA와 일치한다.
+
+최초 공개 커밋은 `61d8b72742f0d545e73f6ece3dcb97af95bf7cc4`다. 업로드 뒤 원격 main과 로컬 HEAD 일치, 공개 범위 public, GitHub 라이선스 인식 MIT를 확인했다. GitHub에서 LICENSE를 다시 읽어 원작자·신규 코드 저작권 표시가 포함됐는지 확인했다.
 
 고지 내용을 반영한 APK 빌드와 내부 고지 파일 포함 검사를 통과했다. 새 빌드 SHA-256: `b9032bb3d73f94e5379a6fa933ac3d7dbd500efd2618579507604bd676c77f32`. 이 파일은 로컬 빌드이며 폰 설치본을 교체하거나 GitHub Release로 배포하지 않았다. 공개 대상 추적 파일과 Git 이력에서 주요 인증키 패턴을 검사했고 일치 항목은 없었다.
