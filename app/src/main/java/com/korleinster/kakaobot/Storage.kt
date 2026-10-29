@@ -10,8 +10,10 @@ import java.time.*
 
 // Synchronous commits intentionally persist dispatch gates before external invocation.
 @android.annotation.SuppressLint("ApplySharedPref")
-class BotPrefs(context: Context) {
-    private val p = context.getSharedPreferences("bot-settings", Context.MODE_PRIVATE)
+class BotPrefs(context: Context, file: String = "bot-settings") {
+    private val p = context.getSharedPreferences(file, Context.MODE_PRIVATE)
+    val targetRoom: String get() = p.getString("targetRoom", DEFAULT_TARGET_ROOM)!!
+    var pairingIssue: String get() = p.getString("pairingIssue", "")!!; set(v) { p.edit().putString("pairingIssue", v).commit() }
     var running: Boolean get() = p.getBoolean("running", false); set(v) { p.edit().putBoolean("running", v).commit() }
     var scheduleEnabled: Boolean get() = p.getBoolean("schedule", false); set(v) { p.edit().putBoolean("schedule", v).commit() }
     var morningEnabled: Boolean get() = p.getBoolean("morning", false); set(v) { p.edit().putBoolean("morning", v).commit() }
@@ -22,6 +24,16 @@ class BotPrefs(context: Context) {
     var code: String get() = p.getString("code", "")!!; set(v) { p.edit().putString("code", v).commit() }
     var codeExpires: Long get() = p.getLong("codeExpires", 0); set(v) { p.edit().putLong("codeExpires", v).commit() }
     var generation: Long get() = p.getLong("generation", 0); set(v) { p.edit().putLong("generation", v).commit() }
+    var lastTargetReceivedAt: Long get() = p.getLong("lastTargetReceivedAt", 0); set(v) { p.edit().putLong("lastTargetReceivedAt", v).commit() }
+    fun startPairing(room: String, newCode: String, now: Long) {
+        val normalized = RoomAdmission.normalizeName(room)
+        require(newCode.matches(Regex("[0-9]{6}")))
+        check(p.edit().putString("targetRoom", normalized).putBoolean("running", false)
+            .putBoolean("schedule", false).putLong("generation", generation + 1)
+            .putString("bound", "").putString("candidate", "").putBoolean("collision", false)
+            .putString("code", newCode).putLong("codeExpires", now + 300_000)
+            .putLong("lastTargetReceivedAt", 0).putString("pairingIssue", "").commit())
+    }
 }
 
 fun Definition.toJson(): String = JSONObject().apply {

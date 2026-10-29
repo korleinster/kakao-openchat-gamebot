@@ -15,7 +15,7 @@
       "source_blob_shas": [
         "4ac284bf7be7f6fd4917e177c76d771013ee9139"
       ],
-      "changes": "Target-room filtering, native MessagingStyle parsing, identity verification, explicit pairing, privacy-safe diagnostics; no AI or conversation storage"
+      "changes": "Configurable target room, structured-title verification, native latest-message parsing, code-based pairing when group or 1:1 notifications omit the room name, identity verification, observable connection state; no AI or conversation storage"
     },
     {
       "local_path": "app/src/main/java/com/korleinster/kakaobot/SessionTransport.kt",

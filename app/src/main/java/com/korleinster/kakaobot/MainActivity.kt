@@ -14,6 +14,8 @@ import java.util.UUID
 class MainActivity : Activity() {
     private lateinit var engine: BotEngine
     private lateinit var status: TextView
+    private lateinit var connection: TextView
+    private lateinit var targetRoom: EditText
     private lateinit var pair: TextView
     private lateinit var history: TextView
     private lateinit var definitions: LinearLayout
@@ -25,6 +27,7 @@ class MainActivity : Activity() {
     private var refreshing = false
     private var lastDefinitionSnapshot = ""
     private val handler = Handler(Looper.getMainLooper())
+    private val statusChanged: () -> Unit = { handler.post { refresh() } }
     private val refreshTask = object : Runnable { override fun run() { refresh(); handler.postDelayed(this, 1000) } }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,18 +44,30 @@ class MainActivity : Activity() {
             text = label; textSize = 16f; setPadding(0,dp(10),0,dp(10)); setOnCheckedChangeListener { _, value -> if (!refreshing) block(value) }; content.addView(this)
         }
         text("게임방 도우미",28f)
-        text("시험 버전 0.1.0 · 대상 방: 봇테스트")
-        status = text("연결 상태 확인 중",19f)
-        text("연결한 대화에만 답해. 1:1 방 연결 중에는 새 알림에서 연결 코드만 검사하고 다른 대화는 저장하지 않아.",14f)
+        text("시험 버전 ${engine.versionName} · 한 번에 한 방 연결")
+        status = text("연결 상태 확인 중",19f).apply { tag = "connection-headline" }
+        connection = text("연결 상태 확인 중",14f).apply { tag = "connection-details" }
+        text("연결한 대화에만 답해. 방 연결 중에는 새 카카오톡 알림의 마지막 메시지에서 연결 코드만 검사하고 다른 대화는 저장하지 않아.",14f)
         button("알림 접근 허용 화면") { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
         button("정시 알림 권한 확인") {
             if (Build.VERSION.SDK_INT >= 31 && !engine.exactAllowed()) startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:$packageName")))
             else toast("정시 알림 권한 있음")
         }
         text("방 연결",21f)
-        button("방 연결 코드 만들기") { engine.submit { engine.beginPair(); handler.post { refresh() } } }
-        pair = text("연결 코드를 만든 뒤 다른 계정에서 봇테스트 방에 입력해줘.")
-        confirm = button("이 방으로 연결 확인") { engine.submit { engine.approvePair(); handler.post { refresh() } } }
+        targetRoom = EditText(this).apply {
+            hint = "대상 오픈채팅방 이름"; setText(engine.prefs.targetRoom); isSingleLine = true
+            contentDescription = "대상 오픈채팅방 이름"; tag = "target-room-input"; content.addView(this)
+        }
+        text("방 이름을 입력하고 새 코드를 만들면 기존 방 연결과 대기 중인 예약 발송이 해제돼.",13f)
+        button("입력한 방으로 연결 코드 만들기") {
+            val room = try { RoomAdmission.normalizeName(targetRoom.text.toString()) } catch (_: IllegalArgumentException) { toast("방 이름을 1~80자로 입력해줘"); return@button }
+            targetRoom.setText(room)
+            (getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager).hideSoftInputFromWindow(targetRoom.windowToken, 0)
+            targetRoom.clearFocus()
+            engine.submit { engine.beginPair(room); handler.post { refresh() } }
+        }.apply { tag = "create-pairing-code" }
+        pair = text("연결 코드를 만든 뒤 다른 계정에서 대상 방에 입력해줘.").apply { tag = "pairing-instructions" }
+        confirm = button("이 방으로 연결 확인") { engine.submit { engine.approvePair(); handler.post { refresh() } } }.apply { tag = "confirm-room" }
         running = toggle("명령 응답 실행") { enabled ->
             if (enabled && (engine.prefs.bound.isBlank() || engine.prefs.collision)) { toast("방을 먼저 연결해줘"); refresh() }
             else engine.submit { engine.prefs.running = enabled; engine.changedSettings(); handler.post { refresh() } }
@@ -71,21 +86,31 @@ class MainActivity : Activity() {
         definitions = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; content.addView(this) }
         text("최근 처리 기록",21f)
         history = text("기록 없음",13f)
-        text("‘전송 요청 수락’은 카카오톡 방에 실제 도착했다는 확인이 아니야. 앱을 강제 중지하거나 답장 연결이 사라지면 새 방 알림이 필요해.",13f)
+        text("상태는 자동으로 갱신돼. ‘답장 준비’는 최근 알림 기준이고 실제 도착은 !핑으로 확인해줘. 앱을 강제 중지하거나 답장 연결이 사라지면 새 방 알림이 필요해.",13f)
         button("라이선스·원본 정보") { AlertDialog.Builder(this).setTitle("오픈소스 고지").setMessage(assets.open("third-party-notices.txt").bufferedReader().readText()).setPositiveButton("닫기", null).show() }
     }
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
     private fun toast(s: String) = Toast.makeText(this,s,Toast.LENGTH_LONG).show()
-    override fun onResume() { super.onResume(); handler.post(refreshTask); engine.submit { engine.tick() } }
-    override fun onPause() { handler.removeCallbacks(refreshTask); super.onPause() }
+    override fun onResume() {
+        super.onResume(); engine.addStatusListener(statusChanged)
+        handler.removeCallbacks(refreshTask); handler.post(refreshTask)
+        engine.submit { engine.requestListenerConnection(); engine.tick() }
+    }
+    override fun onPause() { engine.removeStatusListener(statusChanged); handler.removeCallbacks(refreshTask); super.onPause() }
+    override fun onDestroy() { engine.removeStatusListener(statusChanged); handler.removeCallbacksAndMessages(null); super.onDestroy() }
     private fun refresh() {
         if (!::status.isInitialized) return
         refreshing = true
         status.text = engine.statusLabel()
+        connection.text = engine.connectionDetails()
+        val room = engine.prefs.targetRoom
+        val seconds = engine.connectionState().remainingSeconds(System.currentTimeMillis())
         pair.text = when {
-            engine.prefs.code.isNotBlank() && System.currentTimeMillis() < engine.prefs.codeExpires -> "다른 계정에서 봇테스트 방에 입력\n!연결 ${engine.prefs.code}\n5분 안에 입력한 뒤 이 앱으로 돌아와 연결을 확인해줘."
-            engine.prefs.candidate.isNotBlank() -> "연결 코드가 도착했어.\n직접 코드를 보낸 봇테스트 대화가 맞는지 확인한 뒤 아래 버튼을 눌러줘."
-            engine.prefs.bound.isNotBlank() -> "봇테스트 방 연결 확인됨"
+            engine.prefs.pairingIssue.isNotBlank() && seconds > 0 -> "연결 코드는 받았어.\n${engine.prefs.pairingIssue}\n이 상태에서는 연결 완료로 처리하지 않아. 최근 처리 기록을 확인해줘."
+            engine.prefs.code.isNotBlank() && seconds > 0 -> "다른 계정에서 ‘$room’ 방에 입력\n!연결 ${engine.prefs.code}\n남은 시간 ${seconds / 60}분 ${seconds % 60}초\n이 앱을 열어둬도 코드 수신 상태가 바로 표시돼."
+            engine.prefs.candidate.isNotBlank() -> "연결 코드가 도착했어.\n카카오톡이 방 이름을 주지 않을 수 있으니 직접 코드를 보낸 ‘$room’ 대화가 맞는지 확인한 뒤 아래 버튼을 눌러줘."
+            engine.prefs.bound.isNotBlank() -> "‘$room’ 방 연결 확인됨"
+            engine.prefs.code.isNotBlank() -> "연결 코드가 만료됐어. 새 코드를 만들어줘."
             else -> "연결 코드를 만든 뒤 다른 계정에서 입력해줘."
         }
         confirm.isEnabled = engine.prefs.candidate.isNotBlank() && !engine.prefs.collision

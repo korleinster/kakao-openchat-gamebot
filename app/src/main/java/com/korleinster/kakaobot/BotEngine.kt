@@ -3,11 +3,13 @@ package com.korleinster.kakaobot
 import android.app.*
 import android.content.*
 import android.os.Build
+import android.provider.Settings
 import org.json.JSONObject
 import java.io.File
 import java.time.*
 import java.util.UUID
 import java.util.concurrent.Executors
+import java.util.concurrent.CopyOnWriteArraySet
 
 class BotApp : Application() { override fun onCreate() { super.onCreate(); BotEngine.get(this) } }
 
@@ -19,34 +21,49 @@ class BotEngine private constructor(private val context: Application) {
     val prefs = BotPrefs(context)
     val db = BotDb(context)
     val transport = SessionTransport(context)
+    val versionName: String = context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "unknown"
+    private val statusListeners = CopyOnWriteArraySet<() -> Unit>()
     private val executor = Executors.newSingleThreadExecutor()
     private val alarm = context.getSystemService(AlarmManager::class.java)
     private val alarmIntent: PendingIntent get() = PendingIntent.getBroadcast(context, 1, Intent(context, AlarmReceiver::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     init { db.recoverAfterProcessLoss(); submit { tick() } }
     fun submit(block: () -> Unit) { executor.execute { try { block() } catch (_: Exception) { db.log("작업 오류 · 개인정보 미기록"); report() } } }
     fun exactAllowed(): Boolean = Build.VERSION.SDK_INT < 31 || alarm.canScheduleExactAlarms()
-    fun beginPair() {
-        prefs.running = false; prefs.scheduleEnabled = false; prefs.generation += 1; db.cancelAll()
-        prefs.bound = ""; prefs.candidate = ""; prefs.collision = false
-        prefs.code = pairingCode(); prefs.codeExpires = System.currentTimeMillis() + 300_000
-        transport.clear(); db.log("시험 방 연결 코드 생성"); tick()
+    fun addStatusListener(listener: () -> Unit) { statusListeners.add(listener) }
+    fun removeStatusListener(listener: () -> Unit) { statusListeners.remove(listener) }
+    fun requestListenerConnection() {
+        if (notificationAccessGranted() && !NotificationBridge.connected) {
+            android.service.notification.NotificationListenerService.requestRebind(ComponentName(context, NotificationBridge::class.java))
+        }
+    }
+    fun beginPair(room: String = prefs.targetRoom) {
+        prefs.startPairing(room, pairingCode(), System.currentTimeMillis())
+        db.cancelAll(); transport.clear(); db.log("대상 방 연결 코드 생성"); tick()
     }
     fun approvePair() {
         if (prefs.candidate.isBlank() || !transport.available(prefs.candidate)) { db.log("방 알림을 먼저 받아야 함"); report(); return }
         prefs.bound = prefs.candidate; prefs.candidate = ""; prefs.code = ""; prefs.codeExpires = 0
-        prefs.collision = false; db.log("봇테스트 방 연결 확인 완료"); tick()
+        prefs.collision = false; db.log("대상 방 연결 확인 완료"); tick()
+    }
+    fun pairingReplyUnavailable(expectedCode: String, diagnostics: String, reason: String) {
+        if (expectedCode.isBlank() || prefs.code != expectedCode || System.currentTimeMillis() >= prefs.codeExpires) return
+        prefs.pairingIssue = reason
+        prefs.lastTargetReceivedAt = System.currentTimeMillis()
+        db.log("연결 코드 수신 · 답장 준비 실패"); db.log(diagnostics); report()
     }
     fun changedSettings() { prefs.generation += 1; db.cancelAll(); tick() }
     fun onTargetMessage(identity: String, eventId: String, text: String, cap: ReplyCapability, processCommand: Boolean) {
         val now = Instant.now()
         if (processCommand && prefs.code.isNotBlank() && System.currentTimeMillis() < prefs.codeExpires && text.trim() == "!연결 ${prefs.code}") {
             if (prefs.candidate.isNotBlank() && prefs.candidate != identity) { prefs.collision = true; db.log("동일 이름 방 식별 충돌"); report(); return }
-            transport.accept(cap); prefs.candidate = identity; prefs.code = ""; db.log("연결 후보 수신 · 앱에서 확인 필요"); report(); return
+            transport.accept(cap); prefs.candidate = identity; prefs.code = ""; prefs.pairingIssue = ""; prefs.lastTargetReceivedAt = System.currentTimeMillis()
+            db.log("연결 후보 수신 · 앱에서 확인 필요"); report(); return
         }
         if (prefs.bound.isBlank()) return
         if (identity != prefs.bound) { prefs.collision = true; transport.clear(); db.log("방 식별 충돌 · 발송 차단"); report(); return }
         transport.accept(cap)
         if (!processCommand) { tick(); return }
+        prefs.lastTargetReceivedAt = System.currentTimeMillis()
         if (!prefs.running || prefs.collision || !db.observe(eventId, now)) { report(); return }
         val command = text.trim()
         val response = when (command) {
@@ -54,15 +71,15 @@ class BotEngine private constructor(private val context: Application) {
             "!알림테스트" -> {
                 if (!exactAllowed()) "앱에서 정시 알림 권한을 먼저 허용해줘." else {
                     val due = now.plusSeconds(30)
-                    db.enqueue(Notice("test:$eventId", null, 0, due, due.plusSeconds(60), "[봇테스트] 예약한 시험 알림이야. 화면이 꺼진 상태에서도 도착하는지 확인해줘.", "TEST"), prefs.generation)
-                    "30초 뒤 봇테스트 방에 시험 알림을 보낼게."
+                    db.enqueue(Notice("test:$eventId", null, 0, due, due.plusSeconds(60), "[시험 알림] 예약한 시험 알림이야. 화면이 꺼진 상태에서도 도착하는지 확인해줘.", "TEST"), prefs.generation)
+                    "30초 뒤 연결한 방에 시험 알림을 보낼게."
                 }
             }
             else -> GameCommands.reply(command)
         }
         if (response != null) {
             db.enqueue(Notice("command:$eventId", null, 0, now, now.plusSeconds(60), response, "COMMAND"), prefs.generation)
-            db.log("시험 방 명령 처리")
+            db.log("대상 방 명령 처리")
         }
         tick()
     }
@@ -78,7 +95,7 @@ class BotEngine private constructor(private val context: Application) {
         if (!prefs.running || prefs.bound.isBlank() || prefs.collision) { db.log("봇 실행과 방 연결 확인 필요"); report(); return }
         if (!exactAllowed()) { db.log("정시 알림 권한 필요"); report(); return }
         val due = Instant.now().plusSeconds(30)
-        db.enqueue(Notice("test:${UUID.randomUUID()}", null, 0, due, due.plusSeconds(60), "[봇테스트] 앱에서 예약한 30초 시험 알림", "TEST"), prefs.generation); tick()
+        db.enqueue(Notice("test:${UUID.randomUUID()}", null, 0, due, due.plusSeconds(60), "[시험 알림] 앱에서 예약한 30초 시험 알림", "TEST"), prefs.generation); tick()
     }
     fun tick() {
         val now = Instant.now()
@@ -114,18 +131,47 @@ class BotEngine private constructor(private val context: Application) {
         }
         report()
     }
-    fun statusLabel(): String = when {
-        !NotificationBridge.connected -> "알림 접근 연결 필요"
-        prefs.collision -> "같은 이름의 방 충돌 · 발송 차단"
-        prefs.bound.isBlank() && prefs.candidate.isNotBlank() -> "방 후보 수신 · 연결 확인 버튼 필요"
-        prefs.bound.isBlank() -> "방 연결 대기"
-        !prefs.running -> "봇 일시정지"
-        !transport.available(prefs.bound) -> "새 방 알림 대기"
-        else -> "봇테스트 연결 · 실행 중"
+    fun notificationAccessGranted(): Boolean {
+        val component = ComponentName(context, NotificationBridge::class.java)
+        return if (Build.VERSION.SDK_INT >= 27) context.getSystemService(NotificationManager::class.java).isNotificationListenerAccessGranted(component)
+        else Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")?.split(':')?.any { ComponentName.unflattenFromString(it) == component } == true
+    }
+    fun connectionState(): ConnectionState = ConnectionState(notificationAccessGranted(), NotificationBridge.connected,
+        prefs.bound.isNotBlank(), prefs.candidate.isNotBlank(), prefs.running, prefs.collision,
+        prefs.code, prefs.codeExpires, transport.available(prefs.bound), transport.check(prefs.bound), prefs.pairingIssue)
+    fun statusLabel(): String = connectionState().phase(System.currentTimeMillis()).label
+    fun connectionDetails(): String {
+        val now = System.currentTimeMillis(); val state = connectionState()
+        val roomState = when {
+            state.collision -> "식별 충돌 · 재연결 필요"
+            state.bound -> "확인됨"
+            state.candidate -> "코드 수신됨 · 아래에서 연결 확인"
+            state.pairingIssue.isNotBlank() && now < state.codeExpires -> "코드 수신됨 · 답장 기능 확보 필요"
+            state.code.isNotBlank() && now < state.codeExpires -> "코드 수신 대기 · ${state.remainingSeconds(now)}초 남음"
+            state.code.isNotBlank() -> "코드 만료 · 다시 만들기"
+            else -> "연결 안 됨"
+        }
+        val replyState = when {
+            !state.bound && state.pairingIssue.isNotBlank() && now < state.codeExpires -> state.pairingIssue
+            !state.bound -> "방 연결 확인 필요"
+            !state.hasReply -> "새 대상 방 알림 필요"
+            state.replyBlock != null -> state.replyBlock
+            transport.sourcePresent(prefs.bound) -> "준비됨 · 최근 알림 기준"
+            else -> "최근 답장 정보 보관 중 · 새 알림으로 갱신 가능"
+        }
+        val last = prefs.lastTargetReceivedAt.takeIf { it > 0 }?.let { Instant.ofEpochMilli(it).atZone(GAME_ZONE).format(java.time.format.DateTimeFormatter.ofPattern("MM-dd HH:mm:ss")) } ?: "아직 없음"
+        return "알림 접근: ${if(state.accessGranted) "허용됨" else "허용 필요"}\n" +
+            "알림 수신 연결: ${if(state.listenerConnected) "연결됨" else "연결 대기"}\n" +
+            "대상 방: ${prefs.targetRoom}\n방 연결: $roomState\n답장 준비: $replyState\n" +
+            "명령 응답: ${if(state.running) "켜짐" else "꺼짐"}\n마지막 방 알림: $last"
     }
     fun report() {
+        val state = connectionState(); val now = System.currentTimeMillis()
         val json = JSONObject().apply {
-            put("app_version", "0.1.0-test"); put("target_room", TEST_ROOM); put("status", statusLabel())
+            put("app_version", versionName); put("target_room", prefs.targetRoom); put("status", state.phase(now).label)
+            put("notification_access_granted", state.accessGranted); put("connection_phase", state.phase(now).name)
+            put("pairing_issue", prefs.pairingIssue)
+            put("pairing_remaining_seconds", state.remainingSeconds(now)); put("last_target_received_at", prefs.lastTargetReceivedAt)
             put("running", prefs.running); put("schedule_enabled", prefs.scheduleEnabled); put("notification_connected", NotificationBridge.connected)
             put("bound", prefs.bound.isNotBlank()); put("candidate", prefs.candidate.isNotBlank()); put("pairing_command", if (prefs.code.isNotBlank() && System.currentTimeMillis() < prefs.codeExpires) "!연결 ${prefs.code}" else JSONObject.NULL)
             put("session_available", transport.available(prefs.bound)); put("identity_collision", prefs.collision); put("exact_alarm_allowed", exactAllowed())
@@ -133,6 +179,7 @@ class BotEngine private constructor(private val context: Application) {
         }
         val target = File(context.filesDir, "status.json"); val temp = File(context.filesDir, "status.tmp")
         temp.writeText(json.toString(2)); if (!temp.renameTo(target)) { target.writeText(json.toString(2)); temp.delete() }
+        statusListeners.forEach { it() }
     }
 }
 
