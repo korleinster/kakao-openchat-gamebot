@@ -20,3 +20,7 @@ signing.properties
 *.apk
 *.aab
 .DS_Store
+
+# Python helper caches
+__pycache__/
+*.pyc

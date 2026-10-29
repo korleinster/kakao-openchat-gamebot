@@ -5,26 +5,49 @@
   "commit": "a10b27b46984b8b85712bf84bf452596f607f5c7",
   "license": "MIT",
   "license_path": "licenses/kakao-talk-auto-bot-MIT.txt",
-  "mode": "selective-adaptation-planned",
-  "copied_files": [],
+  "mode": "selective-adaptation",
+  "copied_files": [
+    {
+      "local_path": "app/src/main/java/com/korleinster/kakaobot/NotificationBridge.kt",
+      "source_paths": [
+        "app/src/main/java/com/example/chatbotchichi/NotificationListener.kt"
+      ],
+      "source_blob_shas": [
+        "4ac284bf7be7f6fd4917e177c76d771013ee9139"
+      ],
+      "changes": "Target-room filtering, native MessagingStyle parsing, identity verification, explicit pairing, privacy-safe diagnostics; no AI or conversation storage"
+    },
+    {
+      "local_path": "app/src/main/java/com/korleinster/kakaobot/SessionTransport.kt",
+      "source_paths": [
+        "app/src/main/java/com/example/chatbotchichi/SessionManager.kt",
+        "app/src/main/java/com/example/chatbotchichi/SessionReplier.kt"
+      ],
+      "source_blob_shas": [
+        "d60ef711c6a28be58260d33e0bc92aa10356b3e8",
+        "acddd7c5cf3bd3b65ee84e7cce5f518e3a3ae5c6"
+      ],
+      "changes": "Verified reply capability cache, explicit bound identity, package checks, lock authentication check, request-versus-delivery distinction"
+    }
+  ],
   "reviewed_candidates": [
     {
       "path": "app/src/main/java/com/example/chatbotchichi/NotificationListener.kt",
       "git_blob_sha": "4ac284bf7be7f6fd4917e177c76d771013ee9139",
       "url": "https://github.com/bssm-oss/kakao-talk-auto-bot/blob/a10b27b46984b8b85712bf84bf452596f607f5c7/app/src/main/java/com/example/chatbotchichi/NotificationListener.kt",
-      "status": "reviewed-not-copied"
+      "status": "selectively-adapted"
     },
     {
       "path": "app/src/main/java/com/example/chatbotchichi/SessionManager.kt",
       "git_blob_sha": "d60ef711c6a28be58260d33e0bc92aa10356b3e8",
       "url": "https://github.com/bssm-oss/kakao-talk-auto-bot/blob/a10b27b46984b8b85712bf84bf452596f607f5c7/app/src/main/java/com/example/chatbotchichi/SessionManager.kt",
-      "status": "reviewed-not-copied"
+      "status": "selectively-adapted"
     },
     {
       "path": "app/src/main/java/com/example/chatbotchichi/SessionReplier.kt",
       "git_blob_sha": "acddd7c5cf3bd3b65ee84e7cce5f518e3a3ae5c6",
       "url": "https://github.com/bssm-oss/kakao-talk-auto-bot/blob/a10b27b46984b8b85712bf84bf452596f607f5c7/app/src/main/java/com/example/chatbotchichi/SessionReplier.kt",
-      "status": "reviewed-not-copied"
+      "status": "selectively-adapted"
     }
   ],
   "excluded_repositories": [
