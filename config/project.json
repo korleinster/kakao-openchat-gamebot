@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "design-preparation",
+  "timezone": "Asia/Seoul",
+  "auto_send_enabled": false,
+  "morning_briefing": {
+    "local_time": "07:00",
+    "enabled": false,
+    "confirmed_by_owner": true,
+    "send_when_empty": null
+  },
+  "target_device": {
+    "model_reported": "Galaxy S20+",
+    "android_reported": "13",
+    "one_ui_reported": "5.1",
+    "kakaotalk_version": null,
+    "usb_tethering_in_use": true
+  },
+  "room_bindings": [],
+  "proposed_policy": {
+    "pre_event_late_window_seconds": 60,
+    "morning_recovery_grace_seconds": 600,
+    "status": "draft-not-owner-confirmed"
+  },
+  "github": {
+    "account": "korleinster",
+    "repository_name": null,
+    "visibility": null,
+    "created": false
+  },
+  "timing": {
+    "pre_event_offset_seconds": 300,
+    "confirmed_by_owner": true
+  }
+}

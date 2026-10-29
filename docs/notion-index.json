@@ -1,0 +1,56 @@
+{
+  "hub": {
+    "id": "407e60cc-ff0c-809c-94b3-f693bf4f9d7a",
+    "url": "https://www.notion.so/407e60ccff0c809c94b3f693bf4f9d7a"
+  },
+  "pages": [
+    {
+      "id": "408e60cc-ff0c-81bf-ab2c-f4ffcb0510f4",
+      "url": "https://app.notion.com/p/408e60ccff0c81bfab2cf4ffcb0510f4?pvs=204",
+      "title": "01 기획 개요와 요구사항",
+      "local_path": "docs/01-product-plan.md"
+    },
+    {
+      "id": "408e60cc-ff0c-8127-8567-c882188341da",
+      "url": "https://app.notion.com/p/408e60ccff0c81278567c882188341da?pvs=204",
+      "title": "02 일정 알림 상세 기획",
+      "local_path": "docs/02-alert-rules.md"
+    },
+    {
+      "id": "408e60cc-ff0c-8136-8c91-d68f7e3cf1b4",
+      "url": "https://app.notion.com/p/408e60ccff0c81368c91d68f7e3cf1b4?pvs=204",
+      "title": "03 카카오톡 연결·전송·복구 설계",
+      "local_path": "docs/03-transport-recovery.md"
+    },
+    {
+      "id": "408e60cc-ff0c-81c9-bfeb-e9bb15fc5db9",
+      "url": "https://app.notion.com/p/408e60ccff0c81c9bfebe9bb15fc5db9?pvs=204",
+      "title": "04 아키텍처·데이터·기존 봇 연동",
+      "local_path": "docs/04-architecture-data.md"
+    },
+    {
+      "id": "408e60cc-ff0c-81d5-8b0c-fea22939db0c",
+      "url": "https://app.notion.com/p/408e60ccff0c81d58b0cfea22939db0c?pvs=204",
+      "title": "05 미니게임 기획",
+      "local_path": "docs/05-minigames.md"
+    },
+    {
+      "id": "408e60cc-ff0c-815a-81ab-d5c84ec7add9",
+      "url": "https://app.notion.com/p/408e60ccff0c815a81abd5c84ec7add9?pvs=204",
+      "title": "06 라이선스·원본 코드 관리",
+      "local_path": "docs/06-license-provenance.md"
+    },
+    {
+      "id": "408e60cc-ff0c-81ce-9e49-f2cf4c5a7018",
+      "url": "https://app.notion.com/p/408e60ccff0c81ce9e49f2cf4c5a7018?pvs=204",
+      "title": "07 개발 계획·실기기 검증",
+      "local_path": "docs/07-development-validation.md"
+    },
+    {
+      "id": "408e60cc-ff0c-81d1-9d00-ea5664cddef3",
+      "url": "https://app.notion.com/p/408e60ccff0c81d19d00ea5664cddef3?pvs=204",
+      "title": "08 결정 사항·미정 항목·변경 이력",
+      "local_path": "docs/08-decisions-status.md"
+    }
+  ]
+}
