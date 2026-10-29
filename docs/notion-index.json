@@ -51,6 +51,12 @@
       "url": "https://app.notion.com/p/408e60ccff0c81d19d00ea5664cddef3?pvs=204",
       "title": "08 결정 사항·미정 항목·변경 이력",
       "local_path": "docs/08-decisions-status.md"
+    },
+    {
+      "id": "408e60cc-ff0c-8134-9e76-c033c272268b",
+      "url": "https://app.notion.com/p/408e60ccff0c81349e76c033c272268b?pvs=204",
+      "title": "09 Android 원격 작업 준비·연결 기록",
+      "local_path": "docs/09-android-remote-setup.md"
     }
   ]
 }

@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "prepared_on": "2026-10-29",
+  "host_architecture": "arm64",
+  "platform_tools": {
+    "version": "37.0.1",
+    "adb_version": "1.0.41",
+    "build": "15733141",
+    "source": "https://dl.google.com/android/repository/platform-tools-latest-darwin.zip",
+    "official_metadata": "https://dl.google.com/android/repository/repository2-3.xml",
+    "official_sha1": "6ae73f4de6452dc57e62ec02b68eed92a4c21661",
+    "archive_sha256": "ee39ad5967e95c2a07f04dbcbde96b1a0c916ba376096db5d2f498b7727a5d1d",
+    "install_dir": "work/android-remote/tools/platform-tools"
+  },
+  "scrcpy": {
+    "version": "5.0.1",
+    "source": "https://github.com/Genymobile/scrcpy/releases/download/v5.0.1/scrcpy-macos-aarch64-v5.0.1.tar.gz",
+    "official_sha256": "33611e51977a8289e2e124b220f727895181ef2eb9060e0987a4dc2db9cf0d6b",
+    "install_dir": "work/android-remote/tools/scrcpy-macos-aarch64-v5.0.1"
+  },
+  "policy": {
+    "usb_only": true,
+    "wireless_adb_enabled_by_agent": false,
+    "audio_forwarding": false,
+    "clipboard_autosync": false,
+    "network_settings_changed_by_agent": false,
+    "adb_forward_tunnel": true,
+    "mirror_max_size": 1280
+  },
+  "device_verified": {
+    "model": "SM-G986N",
+    "android": "13",
+    "api": "33",
+    "one_ui": "50100",
+    "usb_functions": "rndis,adb",
+    "kakaotalk_version": "26.9.1",
+    "kakaotalk_version_code": "29260910",
+    "adb_enabled": "1",
+    "screen_size": "Physical size: 1440x3200\nOverride size: 1080x2400"
+  },
+  "validation": {
+    "usb_authorized": true,
+    "shell_queries": true,
+    "screen_navigation_command": true,
+    "visual_screen_verified": true,
+    "screen_state": "owner-unlocked-verified",
+    "route_unchanged": true,
+    "dns_unchanged": true,
+    "tether_interface_active": true,
+    "tetherkit_running": true,
+    "https_status": 200,
+    "touch_scroll_verified": true,
+    "mirror_video_decoded": true,
+    "final_mirror_mode": "control-enabled-audio-and-clipboard-disabled"
+  }
+}

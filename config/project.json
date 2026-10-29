@@ -13,8 +13,11 @@
     "model_reported": "Galaxy S20+",
     "android_reported": "13",
     "one_ui_reported": "5.1",
-    "kakaotalk_version": null,
-    "usb_tethering_in_use": true
+    "kakaotalk_version": "26.9.1",
+    "usb_tethering_in_use": true,
+    "verified_model": "SM-G986N",
+    "verified_api": 33,
+    "usb_debugging_authorized": true
   },
   "room_bindings": [],
   "proposed_policy": {
