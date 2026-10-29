@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "platform_tools": {
+    "version": "37.0.1",
+    "adb_version": "1.0.41",
+    "build": "15733141",
+    "source": "https://dl.google.com/android/repository/platform-tools-latest-darwin.zip",
+    "official_metadata": "https://dl.google.com/android/repository/repository2-3.xml",
+    "official_sha1": "6ae73f4de6452dc57e62ec02b68eed92a4c21661",
+    "archive_sha256": "ee39ad5967e95c2a07f04dbcbde96b1a0c916ba376096db5d2f498b7727a5d1d",
+    "install_dir": "work/android-remote/tools/platform-tools"
+  },
+  "scrcpy": {
+    "version": "5.0.1",
+    "source": "https://github.com/Genymobile/scrcpy/releases/download/v5.0.1/scrcpy-macos-aarch64-v5.0.1.tar.gz",
+    "official_sha256": "33611e51977a8289e2e124b220f727895181ef2eb9060e0987a4dc2db9cf0d6b",
+    "install_dir": "work/android-remote/tools/scrcpy-macos-aarch64-v5.0.1"
+  }
+}

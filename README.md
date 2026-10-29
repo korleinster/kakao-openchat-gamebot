@@ -31,6 +31,7 @@ Local reference copies:
 6. [License and provenance](docs/06-license-provenance.md)
 7. [Development and validation](docs/07-development-validation.md)
 8. [Decisions and open items](docs/08-decisions-status.md)
+9. [Android remote setup](docs/09-android-remote-setup.md)
 
 Local documents preserve Notion date/mention markup where applicable. Notion edits and implementation decisions should be reflected in these copies together.
 
@@ -40,7 +41,9 @@ Selectively adapt the MIT-licensed notification and reply transport from `bssm-o
 
 The planned package boundaries are `domain`, `data`, `transport`, `scheduling`, `integration`, and `app`. The first implementation milestone is a verified text reply in a separate test room.
 
-Java Runtime, Android SDK, Android Studio, adb, and scrcpy were not found in the checked standard locations or command path. Toolchain setup and initial on-device debugging approval are pending. No Gradle or Android versions have been selected for this new project yet.
+ADB 37.0.1 and scrcpy 5.0.1 are installed in the ignored workspace tools folder. The owner approved USB debugging; device queries, screen capture, ADB touch scrolling and scrcpy video decoding were verified on the Android test device with KakaoTalk 26.9.1. USB functions remain rndis,adb; the checked route and DNS were unchanged and tethering remained active.
+
+Java Runtime, Android SDK and Android Studio are still pending. No Gradle or Android build versions have been selected for this new project yet. See [Android remote setup](docs/09-android-remote-setup.md). Run `scripts/adb.sh` for USB commands or `scripts/scrcpy.sh --no-control` for a read-only mirror. The scrcpy helper uses a USB forward tunnel and disables audio and automatic clipboard synchronization.
 
 ## Delivery limitations
 
