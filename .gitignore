@@ -1,0 +1,22 @@
+# Local research, screenshots and device evidence
+work/
+.local/
+local.properties
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+*.pem
+*.key
+secrets.properties
+signing.properties
+
+# Build and editor outputs
+.gradle/
+.kotlin/
+.idea/
+**/build/
+*.apk
+*.aab
+.DS_Store

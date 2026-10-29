@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "reviewed_at": "2026-10-29",
+  "repository": "https://github.com/bssm-oss/kakao-talk-auto-bot",
+  "commit": "a10b27b46984b8b85712bf84bf452596f607f5c7",
+  "license": "MIT",
+  "license_path": "licenses/kakao-talk-auto-bot-MIT.txt",
+  "mode": "selective-adaptation-planned",
+  "copied_files": [],
+  "reviewed_candidates": [
+    {
+      "path": "app/src/main/java/com/example/chatbotchichi/NotificationListener.kt",
+      "git_blob_sha": "4ac284bf7be7f6fd4917e177c76d771013ee9139",
+      "url": "https://github.com/bssm-oss/kakao-talk-auto-bot/blob/a10b27b46984b8b85712bf84bf452596f607f5c7/app/src/main/java/com/example/chatbotchichi/NotificationListener.kt",
+      "status": "reviewed-not-copied"
+    },
+    {
+      "path": "app/src/main/java/com/example/chatbotchichi/SessionManager.kt",
+      "git_blob_sha": "d60ef711c6a28be58260d33e0bc92aa10356b3e8",
+      "url": "https://github.com/bssm-oss/kakao-talk-auto-bot/blob/a10b27b46984b8b85712bf84bf452596f607f5c7/app/src/main/java/com/example/chatbotchichi/SessionManager.kt",
+      "status": "reviewed-not-copied"
+    },
+    {
+      "path": "app/src/main/java/com/example/chatbotchichi/SessionReplier.kt",
+      "git_blob_sha": "acddd7c5cf3bd3b65ee84e7cce5f518e3a3ae5c6",
+      "url": "https://github.com/bssm-oss/kakao-talk-auto-bot/blob/a10b27b46984b8b85712bf84bf452596f607f5c7/app/src/main/java/com/example/chatbotchichi/SessionReplier.kt",
+      "status": "reviewed-not-copied"
+    }
+  ],
+  "excluded_repositories": [
+    {
+      "repository": "https://github.com/lee775/KakaoBot-Android",
+      "reason": "No explicit derivative-use license found; README states personal-use project",
+      "code_copied": false
+    }
+  ]
+}
