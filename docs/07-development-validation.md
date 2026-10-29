@@ -73,3 +73,10 @@ USB 디버깅 활성화가 USB 구성을 바꿔 테더링을 잠시 끊을 수 �
 <mention url="https://app.notion.com/p/408e60ccff0c81278567c882188341da?pvs=204">02 일정 알림 상세 기획</mention>
 
 <mention url="https://app.notion.com/p/408e60ccff0c81368c91d68f7e3cf1b4?pvs=204">03 카카오톡 연결·전송·복구 설계</mention>
+
+## 2026-10-30 보안 빌드 검증
+
+- 현재 기능 커밋 `8acd8f4`의 별도 스냅샷에 Kotlin 2.4.21과 Gradle 8.14.4 보안 도구 갱신을 적용함.
+- 단위 테스트 24개 통과, 린트 오류 0개/경고 8개, 앱·계측 테스트 APK 생성 포함 74개 작업 성공.
+- 원본 작업 폴더와 연결된 단말에는 변경을 적용하지 않음. 진행 중인 단말 검증과 통합할 빌드 후보임.
+- 상세 범위: [보안 도구 갱신](security-toolchain-2026-10-30.md).

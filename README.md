@@ -27,7 +27,7 @@ Version `0.1.1-test` was also verified in a separately configured group open cha
 
 ## Development
 
-Pinned stack: Temurin JDK 17.0.21+9, Gradle 8.9, Android Gradle Plugin 8.7.3, Kotlin 2.0.21, compile/target SDK 35, minimum SDK 26. Owner-device acceptance targets Galaxy S20+ / Android 13 / One UI 5.1 / KakaoTalk 26.9.1. Other devices are not acceptance-tested.
+Pinned stack: Temurin JDK 17.0.21+9, Gradle 8.14.4, Android Gradle Plugin 8.7.3, Kotlin 2.4.21, compile/target SDK 35, minimum SDK 26. Owner-device acceptance targets Galaxy S20+ / Android 13 / One UI 5.1 / KakaoTalk 26.9.1. Other devices are not acceptance-tested.
 
 On macOS ARM64:
 
