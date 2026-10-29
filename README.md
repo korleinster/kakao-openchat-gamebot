@@ -6,9 +6,10 @@ Independently maintained by [korleinster](https://github.com/korleinster), with 
 
 ## Current scope
 
-Version `0.1.0-test` processes **only the explicitly paired test conversation `봇테스트`**. Named group rooms and the owner's one-to-one open-chat test room have separate admission rules. This is an owner-device prototype, not a general KakaoTalk integration or a production release.
+Version `0.1.1-test` processes **one explicitly paired conversation**. Enter the target room name in the app and create a five-minute pairing code. Creating a new code disables responses and schedules, clears the previous binding, and cancels pending deliveries. This is an owner-device prototype, not a general KakaoTalk integration or a production release.
 
 - Pair a room using a short-lived code and confirm it locally.
+- See notification permission, listener connection, pairing progress, reply readiness, and last room notification separately; receive state-change updates while the app is open.
 - Answer `!핑`, `!도움말`, `!오늘`, `!월보`, `!정기`, `!컬렉션`.
 - Play `!주사위 [maximum]` and `!뽑기 name1 name2 ...`.
 - Schedule a one-off 30-second reminder with `!알림테스트`.
@@ -16,11 +17,13 @@ Version `0.1.0-test` processes **only the explicitly paired test conversation `�
 - Register shared collection cycles using an original calendar-month anchor and a reminder offset.
 - Persist schedule and delivery state, claim work atomically, and avoid replaying dispatches with unknown outcomes.
 
-No real game schedules or collection dates are bundled. Automatic schedule sending starts disabled. The application has no Internet permission and does not persist messages from other rooms. Android notification access is still a broad OS permission. Normally the application filters by room metadata or the paired identity before content processing. During the five-minute pairing window, a new unnamed one-to-one notification with a stable identity is checked only for the exact pairing code. The owner must confirm the candidate locally. Unmatched content and message history are not stored or processed as commands.
+No real game schedules or collection dates are bundled. Automatic schedule sending starts disabled. The application has no Internet permission and does not persist messages from other rooms. Android notification access is still a broad OS permission. Normally the application filters by a structured conversation title or the paired identity before content processing. KakaoTalk can omit the room name even in group notifications, and its title can contain the sender's name. During the five-minute pairing window, only the latest message of a new notification with stable identity is checked for the exact code, unless an explicit structured room title contradicts the configured room. The owner must verify where they sent the code and confirm the candidate locally. Unmatched content and older messages are not stored or processed as commands.
 
 ## Verified prototype behavior
 
-On October 29, 2026, the owner confirmed four actual replies (`!핑`, `!주사위 100`, `!뽑기`, and `!알림테스트`) plus the scheduled 30-second notification in the one-to-one test open chat. The phone recorded five accepted requests. The display was turned off before the test; continuous secure-lock/Doze state and precise arrival latency were not measured. Fifteen unit tests and five device database tests passed. Group open chats, long idle periods, reboot recovery, and real game schedules remain pending.
+The initial `0.1.0-test` check on October 29, 2026 confirmed four actual replies (`!핑`, `!주사위 100`, `!뽑기`, and `!알림테스트`) plus the scheduled 30-second notification in the one-to-one test open chat. The phone recorded five accepted requests. The display was turned off before the test; continuous secure-lock/Doze state and precise arrival latency were not measured. Fifteen unit tests and five device database tests passed at that stage.
+
+Version `0.1.1-test` was also verified in a separately configured group open chat: the owner saw the pairing state update without reopening the app, then confirmed the ping reply, test acknowledgement, and scheduled notification. The phone's accepted-request count increased from five to eight. The display was turned off during this follow-up test. Twenty-four unit tests and nine device database/settings/UI/package-visibility checks passed; a separate debug-only pairing preparation helper was also exercised. Long idle periods, reboot recovery, and real game schedules remain pending.
 
 ## Development
 
@@ -33,7 +36,7 @@ python3 scripts/bootstrap-toolchain.py
 scripts/build.sh testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest
 ```
 
-The bootstrap helper verifies pinned official checksums, uses the ignored workspace toolchain folder, and leaves global Java/SDK settings unchanged. It may display the Android SDK package license prompt. The generated standard debug key is for local development only.
+The bootstrap helper verifies pinned official checksums, uses the ignored workspace toolchain folder, and leaves global Java/SDK settings unchanged. It may display the Android SDK package license prompt. The generated standard debug key is for local development only. `scripts/build.sh` keeps generated intermediates in a project-specific temporary directory to avoid duplicate generated files in synchronized checkouts, then mirrors final artifacts and reports to `app/build/`. Direct `./gradlew` builds retain Gradle's normal output location unless `-PbotBuildRoot` is supplied.
 
 On other hosts, configure JDK 17 and Android SDK 35 with Build Tools 34.0.0, set `local.properties`, prepare a debug keystore at `work/toolchain/debug.keystore`, and use `./gradlew`.
 
@@ -45,13 +48,17 @@ scripts/adb.sh install -r -t app/build/outputs/apk/androidTest/debug/app-debug-a
 scripts/adb.sh shell am instrument -w com.korleinster.kakaobot.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
-Grant notification access to the app explicitly on the phone. Create a room-pairing code in the app, send it from another account to `봇테스트`, confirm the candidate in the app, then enable command responses. Keep KakaoTalk out of the foreground so its message notifications can reach the listener. Verify every test reply in the actual chat.
+Default device tests use disposable databases and settings files. Live tests are explicitly opted in: `pair_test_room` can create a new real binding attempt for foreground UI validation, and `prepare_pairing_room` can prepare an owner-authorized code in a debug build without accessing the screen. They reset the existing binding and pending deliveries. Neither adds an exported control endpoint to the main app.
+
+Grant notification access to the app explicitly on the phone. Enter the target room name, create a pairing code, send it from another account to that conversation, confirm the candidate in the app, then enable command responses. Keep the bot app open to watch its countdown and state updates; keep KakaoTalk out of the foreground so its message notifications can reach the listener. Verify every test reply in the actual chat. Notification access being allowed does not itself mean a room has been paired, and cached reply information is not a live Kakao server connection check.
 
 The source APK is `app/build/outputs/apk/debug/app-debug.apk`. Build output, tool binaries, device screenshots, raw logs and signing keys are ignored by Git.
 
 ## Delivery and screen limitations
 
 A successful PendingIntent invocation means the request was accepted, not that the message appeared or was read. Missing or ambiguous room identity blocks sending. Reply capabilities remain in memory; after process loss only active eligible notifications can restore them. Removed notifications do not prove an already cached capability has expired, but every attempt revalidates its bound identity and package. No lifetime guarantee is made.
+
+On listener recovery, a pairing candidate may be recovered only from the latest message of a notification posted after the current code was created and before that code expires; older commands are not replayed. If a valid code arrives without a usable Kakao-owned text reply action, the app shows that failure instead of continuing to say it is waiting for the code. Free-form text input and KakaoTalk intent ownership remain required; file-only inputs are rejected. The manifest declares visibility for `com.kakao.talk` so Android package visibility does not hide the creator information needed for that ownership check.
 
 Background queries and notifications do not require keeping the physical display illuminated. UI work may require the owner to unlock the device; scrcpy supports a physically dark display. Doze, close alarm spacing, permission changes, force-stop, reboot and KakaoTalk changes need separate acceptance tests.
 
