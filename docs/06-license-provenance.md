@@ -1,5 +1,5 @@
 검토일: <date start="2026-10-29" time-zone="Asia/Seoul" />
-문서 상태: 공개 소스·라이선스 검토 기록 v0.1. 현재 준비물에는 원본 실행 코드를 복사하지 않았고 원본 MIT 라이선스 사본과 검토 기준을 보존한다.
+문서 상태: 공개 소스·라이선스 검토 및 구현 반영 기록 v0.2. 알림 수신·답장 코드 일부를 선별 수정했고 원본 MIT 고지와 파일별 출처를 보존한다.
 
 ## 1. 선택한 개발 방향
 
@@ -22,19 +22,21 @@ MIT는 사용·복사·수정·병합·출판·배포·재라이선스·판매�
 
 | 대상 | 검토 기준 | 현재 상태 |
 | --- | --- | --- |
-| NotificationListener.kt | 알림 수신·파싱 | 소스 검토 완료, 복사·수정 전 |
-| SessionManager.kt | 방별 메모리 Action 캐시 | 소스 검토 완료, 식별·복구 설계 보완 필요 |
-| SessionReplier.kt | RemoteInput 전송·상태 | 소스 검토 완료, 결과 의미·재시도 정책 변경 필요 |
+| NotificationListener.kt | 알림 수신·파싱 | NotificationBridge.kt로 선별 수정. 대상 방·1:1 코드 검사, 재연결 시 과거 명령 재실행 방지 |
+| SessionManager.kt | 방별 메모리 Action 캐시 | SessionTransport.kt에 반영. 식별 해시·패키지·권한 검사 |
+| SessionReplier.kt | RemoteInput 전송·상태 | SessionTransport.kt에 반영. 요청 수락과 실제 도착 구분, 결과 불명 재전송 금지 |
 | 로컬 AI 및 대화 저장 | 앱에 결합된 별도 기능 | 1차 미채택 제안 |
 | 앱 아이콘·브랜드 | 원본 자산 | 그대로 사용하지 않고 별도 제작·확인 |
 
-파일을 가져올 때마다 원본 URL·커밋·파일 경로·원본 해시·변경 목적을 provenance에 추가한다. 현재 upstream.lock.json의 copied_files는 비어 있다.
+`upstream.lock.json`에 원본 URL·커밋·파일 경로·원본 blob SHA·변경 목적을 기록했다. 원본 MIT 허가문은 저장소 `licenses/`와 앱 내부 고지 화면에 포함한다.
 
 ## 4. 외부 라이브러리
 
 원본 Gradle/CMake에는 AndroidX, Material, Kotlin coroutines, org.json, LiteRT-LM, llama.cpp 등이 선언돼 있다. 원본 전체를 복제하면 AI 실행 도구까지 의존성이 따라오므로 필요한 통신 부분만 옮기는 쪽을 제안한다.
 
 라이브러리나 모델은 최상위 MIT로 일괄 덮어쓰지 않는다. 실제 빌드에서 해결된 직접·전이 의존성을 목록화하고 버전별 라이선스·NOTICE를 배포 전 검사한다. LiteRT-LM과 현재 참조 Gemma 4 E2B 변환 모델은 Apache-2.0 표기를 확인했지만, 다른 버전·대체 모델까지 동일하다고 가정하지 않는다. Gemma 구세대 약관을 Gemma 4에 그대로 적용하지 않는다.
+
+현재 시험 앱에는 AI 실행 도구·모델을 포함하지 않는다. 실제 런타임 외부 의존성은 Kotlin stdlib 2.0.21과 JetBrains annotations 13.0이며 Apache-2.0 원문을 앱 고지에 포함했다. AndroidX 시험 실행기와 JUnit은 별도 시험 APK에만 사용한다. 자세한 버전·고지는 `THIRD_PARTY_NOTICES.md`에 기록한다.
 
 APK 배포 전: 포함 라이선스 원문·필수 NOTICE 유지, 수정 표시가 필요한 파일은 표시, 별도 자산·상표 권리 확인. MIT 코드 사용 허가와 카카오톡 서비스의 비공식 자동화 허용 여부는 별개의 검토 범위다.
 
