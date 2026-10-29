@@ -13,7 +13,7 @@ task_build_root="${TMPDIR:-/tmp}/kakao-openchat-gamebot-$task_key"
 if [ -x ./gradlew ]; then
     ./gradlew "-PbotBuildRoot=$task_build_root" "$@"
 else
-    "$toolchain/gradle-8.9/bin/gradle" "-PbotBuildRoot=$task_build_root" "$@"
+    "$toolchain/gradle-8.14.4/bin/gradle" "-PbotBuildRoot=$task_build_root" "$@"
 fi
 # Mirror only final artifacts/reports to the documented paths. Gradle never reads
 # these copies, so external synchronization cannot duplicate its intermediates.

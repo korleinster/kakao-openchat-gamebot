@@ -27,7 +27,7 @@ Version `0.1.1-test` was also verified in a separately configured group open cha
 
 ## Development
 
-Pinned stack: Temurin JDK 17.0.21+9, Gradle 8.9, Android Gradle Plugin 8.7.3, Kotlin 2.0.21, compile/target SDK 35, minimum SDK 26. Compatibility varies by Android and KakaoTalk version.
+Pinned stack: Temurin JDK 17.0.21+9, Gradle 8.14.4, Android Gradle Plugin 8.7.3, Kotlin 2.4.21, compile/target SDK 35, minimum SDK 26. Compatibility varies by Android and KakaoTalk version.
 
 On macOS ARM64:
 

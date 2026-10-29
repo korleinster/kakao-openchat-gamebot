@@ -62,9 +62,9 @@ def main():
                 if item.islnk() and not (BASE / item.linkname).resolve().is_relative_to(BASE.resolve()):
                     raise RuntimeError('Unsafe archive link')
             source.extractall(BASE)
-    gradle = BASE / 'gradle-8.9/bin/gradle'
+    gradle = BASE / 'gradle-8.14.4/bin/gradle'
     if not gradle.exists():
-        archive = download('gradle-8.9-bin.zip', 'https://services.gradle.org/distributions/gradle-8.9-bin.zip', 'sha256', LOCK['gradle_sha256'])
+        archive = download('gradle-8.14.4-bin.zip', 'https://services.gradle.org/distributions/gradle-8.14.4-bin.zip', 'sha256', LOCK['gradle_sha256'])
         extract_zip(archive, BASE)
     sdk = BASE / 'android-sdk'
     tools = sdk / 'cmdline-tools/19.0'
