@@ -16,6 +16,10 @@ Version `0.1.0-test` processes **only the explicitly paired test conversation `�
 
 No real game schedules or collection dates are bundled. Automatic schedule sending starts disabled. The application has no Internet permission and does not persist messages from other rooms. Android notification access is still a broad OS permission. Normally the application filters by room metadata or the paired identity before content processing. During the five-minute pairing window, a new unnamed one-to-one notification with a stable identity is checked only for the exact pairing code. The owner must confirm the candidate locally. Unmatched content and message history are not stored or processed as commands.
 
+## Verified prototype behavior
+
+On October 29, 2026, the owner confirmed four actual replies (`!핑`, `!주사위 100`, `!뽑기`, and `!알림테스트`) plus the scheduled 30-second notification in the one-to-one test open chat. The phone recorded five accepted requests. The display was turned off before the test; continuous secure-lock/Doze state and precise arrival latency were not measured. Fifteen unit tests and five device database tests passed. Group open chats, long idle periods, reboot recovery, and real game schedules remain pending.
+
 ## Development
 
 Pinned stack: Temurin JDK 17.0.21+9, Gradle 8.9, Android Gradle Plugin 8.7.3, Kotlin 2.0.21, compile/target SDK 35, minimum SDK 26. Compatibility varies by Android and KakaoTalk version.
