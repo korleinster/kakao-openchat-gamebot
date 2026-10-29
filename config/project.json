@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "design-preparation",
+  "status": "prototype-device-validation",
   "timezone": "Asia/Seoul",
   "auto_send_enabled": false,
   "morning_briefing": {
