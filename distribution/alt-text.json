@@ -1,0 +1,9 @@
+{
+  "locale": "ko-KR",
+  "graphics/icon-512.png": "초록색 바탕에 흰 말풍선과 체크 표시로 구성한 채팅봇 아이콘",
+  "graphics/feature-1024x500.png": "채팅봇: 필요한 기능만 방마다 다르게. 반복 알림, 주기 알림, 말투 선택을 소개하는 이미지",
+  "ko-KR/phone-screenshots/01-rooms.jpg": "채팅방 목록에서 예시 방의 사용 기능과 말투, 연결 준비 상태를 확인하는 화면",
+  "ko-KR/phone-screenshots/02-features.jpg": "다크 모드와 큰 글씨로 반복 알림, 주기 알림, 아침 요약, 주사위, 뽑기를 각각 선택하는 화면",
+  "ko-KR/phone-screenshots/03-tones.jpg": "다섯 가지 봇 말투와 담백한 비서의 알림 미리보기를 보여주는 화면",
+  "ko-KR/phone-screenshots/04-reminders.jpg": "회원권 갱신 예시와 산책 예시를 주기 알림과 반복 알림으로 관리하는 화면"
+}

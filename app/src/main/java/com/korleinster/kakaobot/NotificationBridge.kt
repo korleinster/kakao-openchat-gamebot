@@ -10,9 +10,18 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 
 class NotificationBridge : NotificationListenerService() {
-    companion object { @Volatile var connected = false }
+    companion object {
+        @Volatile var connected = false
+        @Volatile private var current: NotificationBridge? = null
+        fun refreshCurrent() { current?.refreshActive() }
+    }
+    private fun refreshActive() {
+        val engine = BotEngine.get(this)
+        if(!engine.consentAccepted()) return
+        engine.submit { activeNotifications?.forEach { inspect(it, false) }; engine.tick() }
+    }
     override fun onListenerConnected() {
-        connected = true
+        connected = true; current = this
         val engine = BotEngine.get(this)
         engine.submit {
             engine.db.log("알림 접근 연결됨")
@@ -25,7 +34,7 @@ class NotificationBridge : NotificationListenerService() {
         BotEngine.get(this).submit { val e = BotEngine.get(this); e.clearReplyCapabilities(); e.db.log("알림 접근 연결 끊김"); e.report() }
     }
     override fun onDestroy() {
-        connected = false
+        connected = false; if(current === this) current = null
         val engine = BotEngine.get(this)
         engine.submit { engine.clearReplyCapabilities(); engine.report() }
         super.onDestroy()
@@ -38,6 +47,7 @@ class NotificationBridge : NotificationListenerService() {
     }
     private fun inspect(sbn: StatusBarNotification, processCommand: Boolean) {
         if (sbn.packageName != "com.kakao.talk") return
+        if(!BotEngine.get(this).consentAccepted()) return
         val n = sbn.notification
         if (n.flags and Notification.FLAG_GROUP_SUMMARY != 0) return
         // EXTRA_TITLE can contain only the sender even when isGroupConversation=true.
@@ -68,7 +78,7 @@ class NotificationBridge : NotificationListenerService() {
         val pairingPost = pairing?.let { RoomAdmission.currentPairingPost(processCommand, sbn.postTime, it.prefs.codeExpires, now) } == true
         val matchesPair = pairingPost && pairing != null && RoomAdmission.matchesCode(text, pairing.prefs.code)
         if(matchesPair && owner != null && owner.roomId != pairing!!.roomId) {
-            pairing.pairingReplyUnavailable(pairing.prefs.code, "중복 대화 연결 차단", "이미 다른 방 설정에 연결된 대화야. 기존 설정에서 역할을 바꿔줘.")
+            pairing.pairingReplyUnavailable(pairing.prefs.code, "중복 대화 연결 차단", "이미 다른 방 설정에 연결된 대화예요. 기존 방 설정에서 사용할 기능을 바꿔 주세요.")
             return
         }
         val engine = if(matchesPair) pairing!! else owner ?: return

@@ -69,6 +69,18 @@
       "url": "https://www.notion.so/409e60ccff0c81b49bdfc37c40c92eba",
       "title": "11 다중 방·역할 분리 기획 및 설계",
       "local_path": "docs/11-multi-room-roles.md"
+    },
+    {
+      "id": "409e60cc-ff0c-81ad-938a-d7d321a47fb9",
+      "url": "https://www.notion.so/409e60ccff0c81ad938ad7d321a47fb9",
+      "title": "12 채팅봇 기능·말투·화면 개편",
+      "local_path": "docs/12-product-redesign.md"
+    },
+    {
+      "id": "409e60cc-ff0c-818f-b27f-dab0d6f4547b",
+      "url": "https://www.notion.so/409e60ccff0c818fb27fdab0d6f4547b",
+      "title": "13 Google Play 출시 준비·검증",
+      "local_path": "docs/13-play-release.md"
     }
   ]
 }

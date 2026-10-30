@@ -12,7 +12,21 @@ import java.time.*
 @android.annotation.SuppressLint("ApplySharedPref")
 class BotPrefs(context: Context, file: String = "bot-settings") {
     private val p = context.getSharedPreferences(file, Context.MODE_PRIVATE)
-    var role: RoomRole get() = RoomRole.entries.firstOrNull { it.name == p.getString("role", "") } ?: RoomRole.MIXED; set(v) { p.edit().putString("role", v.name).commit() }
+    var features: Set<BotFeature>
+        get() = if(p.contains("features")) p.getStringSet("features", emptySet())!!.mapNotNull { key -> BotFeature.entries.firstOrNull { it.name == key } }.toSet()
+            else FeaturePolicy.migrateRole(p.getString("role", "MIXED")!!, morningEnabled)
+        set(value) { check(p.edit().putStringSet("features", value.map { it.name }.toSet()).commit()) }
+    var tone: BotTone get() = BotTone.entries.firstOrNull { it.name == p.getString("tone", "") } ?: BotTone.ASSISTANT
+        set(value) { check(p.edit().putString("tone", value.name).commit()) }
+    var summaryTime: LocalTime
+        get() = runCatching { LocalTime.parse(p.getString("summaryTime", "07:00")) }.getOrDefault(LocalTime.of(7,0))
+        set(value) { check(p.edit().putString("summaryTime", value.withSecond(0).withNano(0).toString()).commit()) }
+    fun saveConfiguration(selected: Set<BotFeature>, selectedTone: BotTone) {
+        check(p.edit().putStringSet("features", selected.map { it.name }.toSet()).putString("tone", selectedTone.name)
+            .putBoolean("morning", BotFeature.DAILY_SUMMARY in selected)
+            .putBoolean("schedule", scheduleEnabled && FeaturePolicy.hasAlerts(selected)).commit())
+    }
+    fun clear() { check(p.edit().clear().commit()) }
     val targetRoom: String get() = p.getString("targetRoom", DEFAULT_TARGET_ROOM)!!
     var pairingIssue: String get() = p.getString("pairingIssue", "")!!; set(v) { p.edit().putString("pairingIssue", v).commit() }
     var running: Boolean get() = p.getBoolean("running", false); set(v) { p.edit().putBoolean("running", v).commit() }
@@ -40,14 +54,14 @@ class BotPrefs(context: Context, file: String = "bot-settings") {
 fun Definition.toJson(): String = JSONObject().apply {
     put("id", id); put("name", name); put("category", category); put("time", time.toString())
     put("weekdays", JSONArray(weekdays.map { it.value })); put("anchor", anchor?.toString() ?: JSONObject.NULL)
-    put("intervalMonths", intervalMonths); put("noticeDays", noticeDays); put("enabled", enabled); put("revision", revision)
+    put("intervalMonths", intervalMonths); put("noticeDays", noticeDays); put("enabled", enabled); put("revision", revision); put("leadMinutes", leadMinutes)
 }.toString()
 fun definitionFromJson(text: String): Definition = JSONObject(text).let { j ->
     val days = j.getJSONArray("weekdays")
     Definition(j.getString("id"), j.getString("name"), j.getString("category"), LocalTime.parse(j.getString("time")),
         (0 until days.length()).map { DayOfWeek.of(days.getInt(it)) }.toSet(),
         if (j.isNull("anchor")) null else LocalDateTime.parse(j.getString("anchor")),
-        j.getLong("intervalMonths"), j.getLong("noticeDays"), j.getBoolean("enabled"), j.getInt("revision"))
+        j.getLong("intervalMonths"), j.getLong("noticeDays"), j.getBoolean("enabled"), j.getInt("revision"), j.optLong("leadMinutes", 5))
 }
 
 data class Delivery(val notice: Notice, val state: DispatchState, val generation: Long)
@@ -141,25 +155,47 @@ class BotDb(context: Context, name: String = "bot.db") : SQLiteOpenHelper(contex
         db.execSQL("DELETE FROM records WHERE seq NOT IN (SELECT seq FROM records ORDER BY seq DESC LIMIT 100)")
     }
     fun logs(): String = readableDatabase.rawQuery("SELECT at,code FROM records ORDER BY seq DESC LIMIT 12", null).use { c ->
-        buildList { while (c.moveToNext()) add("${Instant.ofEpochMilli(c.getLong(0)).atZone(GAME_ZONE).toLocalTime().withNano(0)}  ${c.getString(1)}") }.joinToString("\n")
+        buildList { while (c.moveToNext()) add("${Instant.ofEpochMilli(c.getLong(0)).atZone(APP_ZONE).toLocalTime().withNano(0)}  ${c.getString(1)}") }.joinToString("\n")
+    }
+    fun clearAll() {
+        val db = writableDatabase; db.beginTransaction()
+        try { listOf("deliveries", "definitions", "observed", "records").forEach { db.delete(it, null, null) }; db.setTransactionSuccessful() }
+        finally { db.endTransaction() }
+        db.execSQL("VACUUM")
+    }
+    fun prune(now: Instant) {
+        val cutoff = now.minus(Duration.ofDays(7)).toEpochMilli()
+        writableDatabase.delete("deliveries", "expires<? AND state NOT IN ('PENDING','WAITING_SESSION','CLAIMED','DISPATCHING')", arrayOf(cutoff.toString()))
+        writableDatabase.delete("records", "at<?", arrayOf(cutoff.toString()))
+        writableDatabase.delete("observed", "seen<?", arrayOf(now.minus(Duration.ofDays(1)).toEpochMilli().toString()))
     }
     fun counts(): JSONObject = JSONObject().apply {
         readableDatabase.rawQuery("SELECT state,COUNT(*) FROM deliveries GROUP BY state", null).use { c -> while (c.moveToNext()) put(c.getString(0), c.getInt(1)) }
     }
 }
 
-/** Registry contains local profile IDs only. Legacy settings/database stay in place. */
+/** Local profile IDs; old role-based registrations are read without altering their files. */
 @android.annotation.SuppressLint("ApplySharedPref")
-class RoomDirectory(context: Context, file: String = "room-directory") {
+class RoomDirectory(context: Context, file: String = "room-directory", private val includeLegacy: Boolean = true) {
     private val p = context.getSharedPreferences(file, Context.MODE_PRIVATE)
-    fun ids(): List<String> = listOf("legacy") + p.getString("ids", "")!!.split(',').filter { it.matches(Regex("[a-f0-9-]{36}")) }.distinct()
-    var selected: String
-        get() = p.getString("selected", "legacy")!!.takeIf { it in ids() } ?: "legacy"
-        set(id) { require(id in ids()); check(p.edit().putString("selected", id).commit()) }
+    fun ids(): List<String> {
+        val raw = if(p.contains("profileIds")) p.getString("profileIds", "")!!
+            else ((if(includeLegacy) listOf("legacy") else emptyList()) + p.getString("ids", "")!!.split(',')).joinToString(",")
+        return raw.split(',').filter { it == "legacy" || it.matches(Regex("[a-f0-9-]{36}")) }.distinct()
+    }
+    var selected: String?
+        get() = p.getString("selected", null)?.takeIf { it in ids() } ?: ids().firstOrNull()
+        set(id) { require(id == null || id in ids()); check(p.edit().putString("selected", id).commit()) }
     fun add(): String {
-        require(ids().size < 20) { "최대 20개 방까지 등록할 수 있어" }
+        require(ids().size < 20) { "최대 20개 방까지 등록할 수 있어요" }
         val id = java.util.UUID.randomUUID().toString()
-        check(p.edit().putString("ids", (ids().drop(1) + id).joinToString(",")).putString("selected", id).commit())
+        check(p.edit().putString("profileIds", (ids() + id).joinToString(",")).putString("selected", id).commit())
         return id
     }
+    fun remove(id: String) {
+        val remaining = ids().filterNot { it == id }
+        val next = selected.takeIf { it in remaining } ?: remaining.firstOrNull()
+        check(p.edit().putString("profileIds", remaining.joinToString(",")).putString("selected", next).commit())
+    }
+    fun clear() { check(p.edit().clear().putString("profileIds", "").commit()) }
 }
