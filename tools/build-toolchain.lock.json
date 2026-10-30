@@ -1,14 +1,14 @@
 {
   "jdk": "Temurin 17.0.21+9",
   "jdk_sha256": "78b08c7f5a0598242d5719c022e19479cb4a3aa45c37c19726a757a469ed1c15",
-  "gradle": "8.9",
-  "gradle_sha256": "d725d707bfabd4dfdc958c624003b3c80accc03f7037b5122c4b1d0ef15cecab",
-  "android_gradle_plugin": "8.7.3",
-  "kotlin": "2.0.21",
-  "compile_sdk": 35,
-  "target_sdk": 35,
+  "gradle": "8.13",
+  "gradle_sha256": "20f1b1176237254a6fc204d8434196fa11a4cfb387567519c61556e8710aed78",
+  "android_gradle_plugin": "8.11.1",
+  "kotlin": "2.2.21",
+  "compile_sdk": 36,
+  "target_sdk": 36,
   "min_sdk": 26,
-  "build_tools": "34.0.0",
+  "build_tools": "35.0.0",
   "command_line_tools": "19.0",
   "command_line_tools_sha1": "c3e06a1959762e89167d1cbaa988605f6f7c1d24"
 }

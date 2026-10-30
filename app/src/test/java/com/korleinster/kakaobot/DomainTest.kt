@@ -5,7 +5,7 @@ import org.junit.Test
 import java.time.*
 
 class DomainTest {
-    private fun korean(s: String) = LocalDateTime.parse(s).atZone(GAME_ZONE).toInstant()
+    private fun korean(s: String) = LocalDateTime.parse(s).atZone(APP_ZONE).toInstant()
     private fun boss(time: String="12:00", revision: Int=1) = Definition("boss-1","시험 월드보스","world_boss",LocalTime.parse(time), revision=revision)
     @Test fun reminderIsDueExactlyFiveMinutesBeforeAndExpiresAfterOneMinute() {
         val now=korean("2026-10-29T11:55:00")

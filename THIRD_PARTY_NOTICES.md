@@ -20,6 +20,8 @@ Changes include explicit room pairing, one-to-one notification admission, hashed
 
 ## Dependencies and assets
 
-The debug runtime dependency graph contains Kotlin standard library 2.0.21 and JetBrains annotations 13.0, both Apache-2.0. The Apache license is preserved in licenses/Kotlin-Apache-2.0.txt and the in-app license screen. The Gradle wrapper is Apache-2.0 build tooling. AndroidX test/JUnit dependencies are used only by test artifacts, not the main app. No AI model weights or upstream icon assets are included. A project's top-level MIT license does not replace dependency licenses or service terms.
+The release runtime graph includes Kotlin standard library 2.2.21, JetBrains annotations 23.0.0, AndroidX Activity 1.11.0 and its Core/Lifecycle/SavedState companions, Kotlin coroutines 1.7.3, and Guava's listenablefuture 1.0. Their Maven POM license declarations are Apache-2.0. The resolved module inventory is in [licenses/runtime-components.json](licenses/runtime-components.json); full Apache-2.0 text and any packaged NOTICE text are preserved in the app's license screen. AndroidX sources are maintained by the Android Open Source Project; Kotlin/coroutines/annotations by JetBrains and contributors; Guava by Google and contributors. These components retain their own notices and are not relicensed by the project's MIT license.
+
+The Gradle wrapper is Apache-2.0 build tooling. AndroidX test/JUnit dependencies belong only to test artifacts. The app icon is project-created vector artwork. No AI model weights or upstream icon assets are included.
 
 The no-license lee775/KakaoBot-Android repository was reviewed as a candidate but its executable code is not incorporated.

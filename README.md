@@ -1,87 +1,72 @@
-# Kakao Open Chat Room Bot
+# Chatbot (채팅봇)
 
-An Android test application for room-specific announcements and lightweight open-chat games, including Lineage 2M schedules.
+An Android app for independently configured messenger rooms, recurring reminders, and lightweight commands.
 
-Independently maintained by [korleinster](https://github.com/korleinster), with selected notification/reply transport portions adapted from [bssm-oss/kakao-talk-auto-bot](https://github.com/bssm-oss/kakao-talk-auto-bot). Credit for those portions belongs to the original kakao-talk-auto-bot contributors.
+## Product
 
-## Current scope
+Version `0.3.0` replaces room roles with independent feature checkboxes:
 
-Version `0.2.0-test` manages **multiple independently paired conversations**, with a role, schedules, delivery records, and response controls for each room. Add a room in the app, choose its role, and create a five-minute pairing code. Re-pairing resets only that room; other confirmed rooms keep their settings. One pairing operation is active at a time, with up to 20 registered profiles in this test version. This is an owner-device prototype, not a general KakaoTalk integration or a production release.
+- Repeating reminders: weekdays, time, and 0–1440 minutes of advance notice.
+- Cycle reminders: original calendar anchor, 1–24 month interval, and advance days.
+- Daily summary: room-specific time, default 07:00 Asia/Seoul, and optional empty-day notices.
+- Dice and candidate draws, independently enabled.
 
-- Pair each room using a short-lived code and confirm it locally. The phone’s KakaoTalk account must already participate in the conversation; adding an app profile does not create or join a KakaoTalk room.
-- Choose a room role: game announcements, games, or both. Help and allowed commands follow that role. Switching to games disables that room’s automatic schedules; switching back requires enabling them again.
-- See notification permission, listener connection, pairing progress, reply readiness, and last room notification separately; receive state-change updates while the app is open.
-- Answer `!핑`, `!도움말`, `!오늘`, `!월보`, `!정기`, `!컬렉션`.
-- Play `!주사위 [maximum]` and `!뽑기 name1 name2 ...`.
-- Schedule a one-off 30-second reminder with `!알림테스트`.
-- Register weekly world-boss/content schedules, five-minute reminders, and a daily briefing at 07:00 Asia/Seoul.
-- Register shared collection cycles using an original calendar-month anchor and a reminder offset.
-- Persist schedule and delivery state, claim work atomically, and avoid replaying dispatches with unknown outcomes.
+Each room also has one of five reply styles: boyfriend, girlfriend, playful kid, elder, or a concise assistant. Previewing or checking a feature does not save it; use the room's save button. Style templates preserve names, dates, numbers, and random results.
 
-No real game schedules or collection dates are bundled. Automatic schedule sending starts disabled. The application has no Internet permission and does not persist messages from unpaired rooms. Android notification access is still a broad OS permission. Normally the application filters by a structured conversation title or the paired identity before content processing. KakaoTalk can omit the room name even in group notifications, and its title can contain the sender's name. During the five-minute pairing window, only the latest message of a new notification with stable identity is checked for the exact code, unless an explicit structured room title contradicts the configured room. The owner must verify where they sent the code and confirm the candidate locally. Unmatched content and older messages are not stored or processed as commands.
+The app has Rooms, Reminders, and Settings screens, light/dark themes, system time/date pickers, and accessible native controls. Existing room bindings and schedules are retained. Earlier combined/announcement/games roles migrate to equivalent feature selections. The previous game-specific categories remain readable while the app uses generic reminder names. Legacy commands remain compatibility aliases; current help shows `!핑`, `!도움말`, enabled reminder queries, `!주사위`, and `!뽑기`.
 
-## Verified prototype behavior
+## Room setup and sending
 
-The initial `0.1.0-test` check on October 29, 2026 confirmed four actual replies (`!핑`, `!주사위 100`, `!뽑기`, and `!알림테스트`) plus the scheduled 30-second notification in the one-to-one test open chat. The phone recorded five accepted requests. The display was turned off before the test; continuous secure-lock/Doze state and precise arrival latency were not measured. Fifteen unit tests and five device database tests passed at that stage.
+The phone's KakaoTalk account must already participate in the conversation. Add a room, send its five-minute pairing code from another account, confirm the candidate locally, and enable that room's bot. Adding an app profile does not create or join a KakaoTalk room. Up to 20 profiles can be registered; large-room-count capacity has not been acceptance-tested.
 
-Version `0.1.1-test` was also verified in a separately configured group open chat: the owner saw the pairing state update without reopening the app, then confirmed the ping reply, test acknowledgement, and scheduled notification. The phone's accepted-request count increased from five to eight. The display was turned off during this follow-up test. Twenty-four unit tests and nine device database/settings/UI/package-visibility checks passed; a separate debug-only pairing preparation helper was also exercised. Long idle periods, reboot recovery, and real game schedules remain pending.
+Configure reminder features and definitions, then enable scheduled sending separately. Adding a feature does not silently turn on existing schedules. Incoming notifications are routed by confirmed conversation identity, independently of the settings screen's selected room. A new pairing attempt affects that profile's binding and pending deliveries; already confirmed other rooms retain their settings.
 
-Version `0.2.0-test` passes 29 unit tests, 11 isolated device database/settings tests, and lint. Installation preserved the existing room binding and response settings. On October 30, 2026, the owner confirmed concurrent operation in an existing group chat (combined role) and a second one-to-one test chat (games role): games help and dice replies, no reply to the games room’s schedule command, and group ping replies. A follow-up test confirmed the group’s test acknowledgement and scheduled notification after approximately 30 seconds, corroborated by separate accepted command and test delivery records. Final accepted-request counts were 12 for the group (baseline eight, including an additional ping) and two for the games chat, with no pending, failed, or unknown deliveries. Room selection, role application, and preservation of the other room’s settings were checked on the phone. The display was turned off for the message test; continuous secure-lock/Doze state and exact arrival latency were not measured. Long-running multiple-group acceptance, 20-room capacity, and Doze/reboot reliability remain pending.
+Reply capabilities stay in memory. Missing identity, conflicting bindings, unavailable reply actions, or required permissions block sending. A successful PendingIntent invocation records request acceptance; actual arrival must be checked in the conversation. Unknown dispatch outcomes are not automatically replayed. Notification structure, device idle state, force-stop, reboot, or messenger changes can require a fresh room notification.
+
+## Privacy and permissions
+
+The in-app disclosure and affirmative consent gate precede notification content processing and sending, including when Android access was granted in an older version. Consent can be withdrawn. The app has no Internet, contacts, location, or broad storage permission and uses no advertising or analytics SDK. It processes KakaoTalk notifications locally and sends configured replies/reminders through KakaoTalk to that conversation's participants.
+
+Room settings and reminder definitions remain until deleted. Completed delivery records older than seven days and deduplication hashes older than one day are pruned when the app runs. Recent processing logs are capped at 100. Room deletion and full local-data deletion are available in the app. Android app-data backup is disabled. See the [privacy policy](docs/privacy-policy.md).
+
+Exact reminders use user-granted `SCHEDULE_EXACT_ALARM`; `USE_EXACT_ALARM` is not declared. Alarm and idle constraints are shared across the app's rooms. Precise delivery is not guaranteed.
 
 ## Development
 
-Pinned stack: Temurin JDK 17.0.21+9, Gradle 8.9, Android Gradle Plugin 8.7.3, Kotlin 2.0.21, compile/target SDK 35, minimum SDK 26. Compatibility varies by Android and KakaoTalk version.
+Pinned stack: JDK 17.0.21+9, Gradle 8.13, AGP 8.11.1, Kotlin 2.2.21, compile/target SDK 36, Build Tools 35.0.0, minimum SDK 26. The runtime includes AndroidX Activity 1.11.0 for lifecycle-aware back navigation and edge-to-edge handling.
 
 On macOS ARM64:
 
 ```sh
 python3 scripts/bootstrap-toolchain.py
-scripts/build.sh testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest
+scripts/build.sh testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest bundleRelease lintRelease
 ```
 
-The bootstrap helper verifies pinned official checksums, uses the ignored workspace toolchain folder, and leaves global Java/SDK settings unchanged. It may display the Android SDK package license prompt. The generated standard debug key is for local development only. `scripts/build.sh` keeps generated intermediates in a project-specific temporary directory to avoid duplicate generated files in synchronized checkouts, then mirrors final artifacts and reports to `app/build/`. Direct `./gradlew` builds retain Gradle's normal output location unless `-PbotBuildRoot` is supplied.
+The bootstrap verifies pinned official checksums and uses the ignored local toolchain directory. Android tools display any required package-license prompt. On other hosts, provide JDK 17 and Android SDK 36/Build Tools 35.0.0, configure `local.properties`, and use `./gradlew`.
 
-On other hosts, configure JDK 17 and Android SDK 35 with Build Tools 34.0.0, set `local.properties`, prepare a debug keystore at `work/toolchain/debug.keystore`, and use `./gradlew`.
+The build helper keeps project caches and intermediates in a project-specific temporary directory and mirrors final outputs/reports to `app/build/`. Optional `BOT_JAVA_HOME`, `BOT_ANDROID_HOME`, `BOT_GRADLE_USER_HOME`, and `BOT_GRADLE_EXECUTABLE` support tools outside synchronized folders. Direct Gradle builds use normal locations unless configured explicitly. Local build tools, keys, device screenshots, raw evidence, and generated APK/AAB files are ignored by Git.
 
-## Owner-device setup
+Outputs:
 
-```sh
-scripts/adb.sh install -r app/build/outputs/apk/debug/app-debug.apk
-scripts/adb.sh install -r -t app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
-scripts/adb.sh shell am instrument -w com.korleinster.kakaobot.test/androidx.test.runner.AndroidJUnitRunner
-```
+- Debug APK: `app/build/outputs/apk/debug/app-debug.apk`.
+- Test APK: `app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk`.
+- Release bundle: `app/build/outputs/bundle/release/app-release.aab`.
 
-Default device tests use disposable databases and settings files. Live tests are explicitly opted in: `pair_test_room` can create a new real binding attempt for foreground UI validation, and `prepare_pairing_room` can prepare an owner-authorized code in a debug build without accessing the screen. They reset the existing binding and pending deliveries. Neither adds an exported control endpoint to the main app.
+The default release bundle is unsigned. To sign for upload, configure the ignored root `signing.properties` with your protected upload key's `storeFile`, `storePassword`, `keyAlias`, and `keyPassword`. Release never falls back to the standard debug key.
 
-Grant notification access to the app explicitly on the phone. Use “새 방 추가” to register another room, enter its name and role, send the generated code from another account to that conversation, confirm the candidate in the app, then enable its command responses. Use “관리할 방 선택” to change the room shown in settings. Incoming notifications are routed by their confirmed conversation identity, independently of the selected settings screen. Keep the bot app open to watch its countdown and state updates; keep KakaoTalk out of the foreground so its message notifications can reach the listener. Verify every test reply in the actual chat. Notification access being allowed does not itself mean a room has been paired, and cached reply information is not a live Kakao server connection check.
+## Verification and release preparation
 
-The source APK is `app/build/outputs/apk/debug/app-debug.apk`. Build output, tool binaries, device screenshots, raw logs and signing keys are ignored by Git.
+Version 0.3.0 passed 35 unit tests, 19 product checks on the Android 13 owner device, and 18 product checks on an Android 16 emulator. These include overlapping cases across environments. Fresh real-recipient messaging verification is pending. The checks cover feature combinations, tone payload preservation, scheduling boundaries, consent state, migration, deletion, and room isolation. Explicit owner-device tests use opt-in arguments and disposable profiles; normal runs do not change real bindings. Keep the device unlocked for foreground UI tests. Debug-only preparation helpers are in the separate test APK and are not exported endpoints in the main app.
 
-## Room isolation
+A prototype's short real-device messaging result does not establish long-term Doze/reboot reliability. Current per-version evidence is maintained in [implementation status](docs/10-implementation-status.md) and [product redesign](docs/12-product-redesign.md).
 
-Each new profile uses a local UUID, separate settings, and a separate SQLite database. Existing `bot-settings` and `bot.db` remain the first profile, with the combined role as the default. Choose a role and press “선택한 역할 적용” to save it. Changing a role preserves the binding and schedule definitions, cancels that room’s pending deliveries, and recalculates eligible future work. The earliest wake-up across all rooms drives one app alarm. Android’s app-level idle restrictions still apply across rooms. A conversation already bound to another profile cannot be paired again; ambiguous identity blocks the affected profiles.
-
-The role presets control the existing command modules. Natural-language AI personas, custom modules, per-member administrator authorization, and long-running multi-room acceptance are separate future work. See `docs/11-multi-room-roles.md` for requirements and validation status.
-
-## Delivery and screen limitations
-
-A successful PendingIntent invocation means the request was accepted, not that the message appeared or was read. Missing or ambiguous room identity blocks sending. Reply capabilities remain in memory; after process loss only active eligible notifications can restore them. Removed notifications do not prove an already cached capability has expired, but every attempt revalidates its bound identity and package. No lifetime guarantee is made.
-
-On listener recovery, a pairing candidate may be recovered only from the latest message of a notification posted after the current code was created and before that code expires; older commands are not replayed. If a valid code arrives without a usable Kakao-owned text reply action, the app shows that failure instead of continuing to say it is waiting for the code. Free-form text input and KakaoTalk intent ownership remain required; file-only inputs are rejected. The manifest declares visibility for `com.kakao.talk` so Android package visibility does not hide the creator information needed for that ownership check.
-
-Background queries and notifications do not require keeping the physical display illuminated. UI work may require the owner to unlock the device; scrcpy supports a physically dark display. Doze, close alarm spacing, permission changes, force-stop, reboot and KakaoTalk changes need separate acceptance tests.
-
-## Documentation
+Google Play preparation includes target API 36, a release bundle, privacy/consent/deletion flows, and Korean listing copy in `distribution/ko-KR/`. Actual submission still requires the owner's developer account, public support email, upload signing, Console declarations, review access material, and applicable closed testing. See the [release preparation record](docs/13-play-release.md). No store submission or approval has been performed.
 
 
-`config/project.json` records planning defaults; the installed app stores its runtime configuration privately on the phone. The source repository is [korleinster/kakao-openchat-gamebot](https://github.com/korleinster/kakao-openchat-gamebot).
+## License and provenance
 
-## License
+Independently maintained by [korleinster](https://github.com/korleinster). Selected notification/reply transport portions are adapted from [bssm-oss/kakao-talk-auto-bot](https://github.com/bssm-oss/kakao-talk-auto-bot) at commit [a10b27b46984b8b85712bf84bf452596f607f5c7](https://github.com/bssm-oss/kakao-talk-auto-bot/tree/a10b27b46984b8b85712bf84bf452596f607f5c7).
 
-Project material is licensed under the **MIT License**; see [LICENSE](LICENSE). Retain applicable copyright and permission notices when redistributing copies or substantial portions.
+The project is MIT-licensed; retain applicable copyright and permission notices. New code: Copyright (c) 2026 korleinster. Adapted portions: Copyright (c) 2026 kakao-talk-auto-bot contributors. The exact original [MIT license](licenses/kakao-talk-auto-bot-MIT.txt), root [LICENSE](LICENSE), [source mappings](upstream.lock.json), [third-party notices](THIRD_PARTY_NOTICES.md), and in-app license text preserve attribution. Runtime libraries retain their Apache-2.0 licenses; resolved modules are recorded in [runtime-components.json](licenses/runtime-components.json).
 
-- New project code: Copyright (c) 2026 korleinster.
-- Adapted portions: Copyright (c) 2026 kakao-talk-auto-bot contributors, originally MIT-licensed. The exact upstream license is preserved in [licenses/kakao-talk-auto-bot-MIT.txt](licenses/kakao-talk-auto-bot-MIT.txt).
-- Original source: [bssm-oss/kakao-talk-auto-bot at a10b27b46984b8b85712bf84bf452596f607f5c7](https://github.com/bssm-oss/kakao-talk-auto-bot/tree/a10b27b46984b8b85712bf84bf452596f607f5c7). File mappings, original hashes, and modification summaries are in [upstream.lock.json](upstream.lock.json) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-
-Runtime Kotlin/JetBrains components retain their Apache-2.0 license. Full notices and source attribution are included in the app's license screen and in `licenses/`. This independently maintained project is not an official Kakao or NCSOFT product and is not endorsed by the upstream authors.
+The app is independently developed and is not an official Kakao application or an endorsed integration.

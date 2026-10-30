@@ -21,9 +21,13 @@ class BotEngine private constructor(private val context: Application, val roomId
         fun get(context: Context): BotEngine = instance ?: synchronized(this) { instance ?: BotEngine(context.applicationContext as Application).also { instance = it } }
     }
     private val root: BotEngine get() = coordinator ?: this
-    private val directory by lazy { RoomDirectory(context) }
+    private val legacyDataPresent = context.getSharedPreferences("bot-settings", Context.MODE_PRIVATE).all.isNotEmpty()
+    private val directory by lazy { RoomDirectory(context, includeLegacy = legacyDataPresent) }
+    private val consent: AppConsent = coordinator?.consent ?: AppConsent(context)
+    fun consentAccepted(): Boolean = root.consent.accepted
+    val selectedOrNull: BotEngine? get() = root.directory.selected?.let { root.room(it) }
     private val roomEngines = ConcurrentHashMap<String, BotEngine>()
-    val selected: BotEngine get() = root.room(root.directory.selected)
+    val selected: BotEngine get() = selectedOrNull ?: error("채팅방을 먼저 추가해 주세요")
     fun rooms(): List<BotEngine> = root.directory.ids().map { root.room(it) }
     private fun room(id: String): BotEngine = if(id == "legacy") root else root.roomEngines.computeIfAbsent(id) { BotEngine(context, id, root) }
     fun selectRoom(id: String) { root.directory.selected = id; report() }
@@ -69,14 +73,35 @@ class BotEngine private constructor(private val context: Application, val roomId
         prefs.lastTargetReceivedAt = System.currentTimeMillis()
         db.log("연결 코드 수신 · 답장 준비 실패"); db.log(diagnostics); report()
     }
-    fun changeRole(role: RoomRole) {
-        prefs.role = role
-        if(!role.schedules) prefs.scheduleEnabled = false
-        changedSettings()
+    fun saveConfiguration(features: Set<BotFeature>, tone: BotTone) {
+        prefs.saveConfiguration(features, tone); changedSettings()
+    }
+    fun acceptConsent() {
+        root.consent.accept(); requestListenerConnection(); NotificationBridge.refreshCurrent(); tick()
+    }
+    fun revokeConsent() {
+        root.consent.revoke(); clearReplyCapabilities(); root.alarm.cancel(root.alarmIntent); report()
+    }
+    fun removeRoom(id: String) {
+        val target = rooms().firstOrNull { it.roomId == id } ?: return
+        target.prefs.running = false; target.db.cancelAll(); target.transport.clear()
+        target.db.clearAll(); target.prefs.clear(); root.directory.remove(id)
+        if(id != "legacy") { root.roomEngines.remove(id)?.db?.close(); context.deleteDatabase("room-$id.db") }
+        tick()
+    }
+    fun eraseAllData() {
+        root.consent.revoke(); root.alarm.cancel(root.alarmIntent)
+        rooms().map { it.roomId }.forEach { removeRoom(it) }
+        root.prefs.clear(); root.db.clearAll(); root.directory.clear(); revokeConsent()
+    }
+    fun disconnectRoom() {
+        prefs.running=false; prefs.scheduleEnabled=false; prefs.bound=""; prefs.candidate=""; prefs.code=""; prefs.codeExpires=0
+        prefs.pairingIssue=""; prefs.collision=false; prefs.lastTargetReceivedAt=0; transport.clear(); changedSettings()
     }
     fun clearReplyCapabilities() { rooms().forEach { it.transport.clear() }; report() }
     fun changedSettings() { prefs.generation += 1; db.cancelAll(); tick() }
     fun onTargetMessage(identity: String, eventId: String, text: String, cap: ReplyCapability, processCommand: Boolean) {
+        if(!consentAccepted()) return
         val now = Instant.now()
         if (processCommand && prefs.code.isNotBlank() && System.currentTimeMillis() < prefs.codeExpires && text.trim() == "!연결 ${prefs.code}") {
             if (prefs.candidate.isNotBlank() && prefs.candidate != identity) { prefs.collision = true; db.log("동일 이름 방 식별 충돌"); report(); return }
@@ -90,45 +115,55 @@ class BotEngine private constructor(private val context: Application, val roomId
         prefs.lastTargetReceivedAt = System.currentTimeMillis()
         if (!prefs.running || prefs.collision || !db.observe(eventId, now)) { report(); return }
         val command = text.trim()
-        if(!prefs.role.allows(command)) { report(); return }
+        if(!FeaturePolicy.allows(prefs.features, command)) { report(); return }
         val response = when (command) {
-            "!도움말" -> prefs.role.help()
-            "!오늘", "!월보", "!정기", "!컬렉션" -> scheduleReply(command, now)
+            "!도움말" -> FeaturePolicy.help(prefs.features)
+            "!오늘", "!알림", "!주기", "!월보", "!정기", "!컬렉션" -> scheduleReply(command, now)
             "!알림테스트" -> {
-                if (!exactAllowed()) "앱에서 정시 알림 권한을 먼저 허용해줘." else {
+                if (!exactAllowed()) "앱 설정에서 정확한 알림 권한을 허용해 주세요." else {
                     val due = now.plusSeconds(30)
-                    db.enqueue(Notice("test:$eventId", null, 0, due, due.plusSeconds(60), "[시험 알림] 예약한 시험 알림이야. 화면이 꺼진 상태에서도 도착하는지 확인해줘.", "TEST"), prefs.generation)
-                    "30초 뒤 연결한 방에 시험 알림을 보낼게."
+                    db.enqueue(Notice("test:$eventId", null, 0, due, due.plusSeconds(60), "[연결 확인] 예약한 30초 알림입니다.", "TEST"), prefs.generation)
+                    "30초 후 이 대화에 시험 알림을 보냅니다."
                 }
             }
             else -> GameCommands.reply(command)
         }
         if (response != null) {
-            db.enqueue(Notice("command:$eventId", null, 0, now, now.plusSeconds(60), response, "COMMAND"), prefs.generation)
+            val kind = when(FeaturePolicy.token(command)) {
+                "!핑" -> MessageKind.PING; "!도움말" -> MessageKind.HELP
+                "!주사위", "!뽑기" -> MessageKind.GAME; "!알림테스트" -> MessageKind.ACK
+                else -> MessageKind.INFO
+            }
+            db.enqueue(Notice("command:$eventId", null, 0, now, now.plusSeconds(60), BotMessages.render(prefs.tone, kind, response), "COMMAND"), prefs.generation)
             db.log("대상 방 명령 처리")
         }
         tick()
     }
     private fun scheduleReply(command: String, now: Instant): String {
-        val category = when(command) { "!월보" -> "world_boss"; "!정기" -> "content"; "!컬렉션" -> "collection"; else -> null }
-        val defs = db.definitions().filter { it.enabled && (category == null || it.category == category) }
-        if (defs.isEmpty()) return if (category == "collection") "아직 컬렉션 기준일·주기가 등록되지 않았어." else "아직 확인된 일정이 등록되지 않았어."
-        val today = now.atZone(GAME_ZONE).toLocalDate()
-        val events = Planner.occurrences(defs, now).filter { it.start >= now && (category == "collection" || it.start.atZone(GAME_ZONE).toLocalDate() == today) }.take(15)
-        return if (events.isEmpty()) "오늘 남은 등록 일정이 없어." else "[등록 일정 · 한국 시간]\n" + events.joinToString("\n") { "${it.start.atZone(GAME_ZONE).toLocalDate()} ${it.start.atZone(GAME_ZONE).toLocalTime()} ${it.source.name}" }
+        val cycleOnly = command in setOf("!주기", "!컬렉션")
+        val defs = db.definitions().filter { d -> d.enabled &&
+            (if(d.isMonthly) BotFeature.CYCLE_REMINDERS in prefs.features else
+                (BotFeature.REPEATING_REMINDERS in prefs.features || BotFeature.DAILY_SUMMARY in prefs.features)) &&
+            (!cycleOnly || d.isMonthly) &&
+            (command != "!월보" || d.category == "world_boss") && (command != "!정기" || !d.isMonthly)
+        }
+        if(defs.isEmpty()) return "등록된 알림이 없어요. 앱의 알림 탭에서 추가할 수 있어요."
+        val today = now.atZone(APP_ZONE).toLocalDate()
+        val events = Planner.occurrences(defs, now).filter { it.start >= now && (cycleOnly || it.start.atZone(APP_ZONE).toLocalDate() == today) }.take(15)
+        return if(events.isEmpty()) "오늘 남은 알림이 없어요." else "[등록 알림 · 한국 시간]\n" + events.joinToString("\n") { "${it.start.atZone(APP_ZONE).toLocalDate()} ${it.start.atZone(APP_ZONE).toLocalTime()} ${it.source.name}" }
     }
     fun localTest() {
-        if (!prefs.running || prefs.bound.isBlank() || prefs.collision) { db.log("봇 실행과 방 연결 확인 필요"); report(); return }
+        if (!consentAccepted() || !prefs.running || prefs.bound.isBlank() || prefs.collision) { db.log("봇 실행과 방 연결 확인 필요"); report(); return }
         if (!exactAllowed()) { db.log("정시 알림 권한 필요"); report(); return }
         val due = Instant.now().plusSeconds(30)
-        db.enqueue(Notice("test:${UUID.randomUUID()}", null, 0, due, due.plusSeconds(60), "[시험 알림] 앱에서 예약한 30초 시험 알림", "TEST"), prefs.generation); tick()
+        db.enqueue(Notice("test:${UUID.randomUUID()}", null, 0, due, due.plusSeconds(60), "[연결 확인] 앱에서 예약한 30초 알림입니다.", "TEST"), prefs.generation); tick()
     }
     fun tick() {
         if(coordinator != null) { root.tick(); return }
         val all = rooms()
         all.forEach { room -> try { room.processTick() } catch (_: Exception) { room.db.log("이 방 작업 오류 · 다른 방 처리 계속") } }
         alarm.cancel(alarmIntent)
-        if(exactAllowed()) all.filter { it.prefs.running && !it.prefs.collision }.mapNotNull { it.db.nextWake(Instant.now()) }.minOrNull()?.let { next ->
+        if(consentAccepted() && exactAllowed()) all.filter { it.prefs.running && !it.prefs.collision }.mapNotNull { it.db.nextWake(Instant.now()) }.minOrNull()?.let { next ->
             try { alarm.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, next, alarmIntent) }
             catch (_: SecurityException) { db.log("정시 알림 권한 필요") }
         }
@@ -136,8 +171,15 @@ class BotEngine private constructor(private val context: Application, val roomId
     }
     private fun processTick() {
         val now = Instant.now()
-        db.expire(now)
-        val planned = if (prefs.running && prefs.role.schedules && prefs.scheduleEnabled && prefs.bound.isNotBlank()) Planner.plan(db.definitions(), now, prefs.morningEnabled, prefs.sendEmpty).map { it.copy(id="${prefs.bound.take(16)}:${it.id}") } else emptyList()
+        db.expire(now); db.prune(now)
+        if(!consentAccepted()) return
+        val defs = db.definitions()
+        val planned = if(prefs.running && prefs.scheduleEnabled && FeaturePolicy.hasAlerts(prefs.features) && prefs.bound.isNotBlank())
+            Planner.plan(defs, now, BotFeature.DAILY_SUMMARY in prefs.features, prefs.sendEmpty, prefs.summaryTime).filter { n ->
+                if(n.kind == "BRIEFING") BotFeature.DAILY_SUMMARY in prefs.features
+                else defs.firstOrNull { it.id == n.sourceId }?.let { if(it.isMonthly) BotFeature.CYCLE_REMINDERS in prefs.features else BotFeature.REPEATING_REMINDERS in prefs.features } == true
+            }.map { it.copy(id="${prefs.bound.take(16)}:${it.id}") }
+            else emptyList()
         db.reconcile(planned, prefs.generation)
         if (prefs.running && prefs.bound.isNotBlank() && !prefs.collision) {
             db.due(now).forEach { d ->
@@ -148,12 +190,14 @@ class BotEngine private constructor(private val context: Application, val roomId
                 val at = Instant.now()
                 if (!db.claim(d.notice.id, at, prefs.generation)) return@forEach
                 if (!prefs.running || prefs.collision || !db.markDispatching(d, Instant.now())) return@forEach
-                val body = if (d.notice.kind == "REMINDER" && db.definitions().firstOrNull { it.id == d.notice.sourceId }?.category != "collection") {
-                    val seconds = Duration.between(Instant.now(), d.notice.due.plusSeconds(300)).seconds.coerceAtLeast(0)
+                val body = if (d.notice.kind == "REMINDER" && db.definitions().firstOrNull { it.id == d.notice.sourceId }?.isMonthly == false) {
+                    val seconds = Duration.between(Instant.now(), d.notice.due.plusSeconds((db.definitions().firstOrNull { it.id == d.notice.sourceId }?.leadMinutes ?: 5) * 60)).seconds.coerceAtLeast(0)
                     d.notice.body + "\n남은 시간: ${seconds / 60}분 ${seconds % 60}초"
                 } else d.notice.body
                 try {
-                    val accepted = transport.invoke(prefs.bound, body)
+                    val outgoing = if(d.notice.kind == "COMMAND") body else BotMessages.render(prefs.tone,
+                        if(d.notice.kind == "BRIEFING") MessageKind.BRIEFING else MessageKind.REMINDER, body)
+                    val accepted = transport.invoke(prefs.bound, outgoing)
                     db.mark(d.notice.id, if (accepted) DispatchState.REQUEST_ACCEPTED else DispatchState.FAILED_PRE_SEND)
                     db.log(if (accepted) "카카오톡 전송 요청 수락 · 도착 확인은 별도" else "전송 결과 불명 · 자동 재전송 없음")
                 } catch (_: Exception) {
@@ -170,7 +214,7 @@ class BotEngine private constructor(private val context: Application, val roomId
     }
     fun connectionState(): ConnectionState = ConnectionState(notificationAccessGranted(), NotificationBridge.connected,
         prefs.bound.isNotBlank(), prefs.candidate.isNotBlank(), prefs.running, prefs.collision,
-        prefs.code, prefs.codeExpires, transport.available(prefs.bound), transport.check(prefs.bound), prefs.pairingIssue)
+        prefs.code, prefs.codeExpires, transport.available(prefs.bound), transport.check(prefs.bound), prefs.pairingIssue, consentAccepted())
     fun statusLabel(): String = connectionState().phase(System.currentTimeMillis()).label
     fun connectionDetails(): String {
         val now = System.currentTimeMillis(); val state = connectionState()
@@ -191,15 +235,15 @@ class BotEngine private constructor(private val context: Application, val roomId
             transport.sourcePresent(prefs.bound) -> "준비됨 · 최근 알림 기준"
             else -> "최근 답장 정보 보관 중 · 새 알림으로 갱신 가능"
         }
-        val last = prefs.lastTargetReceivedAt.takeIf { it > 0 }?.let { Instant.ofEpochMilli(it).atZone(GAME_ZONE).format(java.time.format.DateTimeFormatter.ofPattern("MM-dd HH:mm:ss")) } ?: "아직 없음"
+        val last = prefs.lastTargetReceivedAt.takeIf { it > 0 }?.let { Instant.ofEpochMilli(it).atZone(APP_ZONE).format(java.time.format.DateTimeFormatter.ofPattern("MM-dd HH:mm:ss")) } ?: "아직 없음"
         return "알림 접근: ${if(state.accessGranted) "허용됨" else "허용 필요"}\n" +
             "알림 수신 연결: ${if(state.listenerConnected) "연결됨" else "연결 대기"}\n" +
-            "대상 방: ${prefs.targetRoom}\n역할: ${prefs.role.label}\n방 연결: $roomState\n답장 준비: $replyState\n" +
+            "대상 방: ${prefs.targetRoom}\n기능: ${prefs.features.joinToString { it.label }}\n방 연결: $roomState\n답장 준비: $replyState\n" +
             "명령 응답: ${if(state.running) "켜짐" else "꺼짐"}\n마지막 방 알림: $last"
     }
     fun report() {
         if(coordinator != null) { root.report(); return }
-        val json = selected.statusJson().apply { put("rooms", JSONArray(rooms().map { it.statusJson() })); put("selected_room_id", selected.roomId) }
+        val json = (selectedOrNull?.statusJson() ?: JSONObject().put("app_version", versionName).put("consent_accepted", consentAccepted())).apply { put("rooms", JSONArray(rooms().map { it.statusJson() })); put("selected_room_id", selectedOrNull?.roomId ?: JSONObject.NULL) }
         val target = File(context.filesDir, "status.json"); val temp = File(context.filesDir, "status.tmp")
         temp.writeText(json.toString(2)); if (!temp.renameTo(target)) { target.writeText(json.toString(2)); temp.delete() }
         statusListeners.forEach { it() }
@@ -207,7 +251,7 @@ class BotEngine private constructor(private val context: Application, val roomId
     private fun statusJson(): JSONObject {
         val state = connectionState(); val now = System.currentTimeMillis()
         return JSONObject().apply {
-            put("room_id", roomId); put("role", prefs.role.name)
+            put("room_id", roomId); put("features", JSONArray(prefs.features.map { it.name })); put("tone", prefs.tone.name); put("consent_accepted", consentAccepted())
             put("app_version", versionName); put("target_room", prefs.targetRoom); put("status", state.phase(now).label)
             put("notification_access_granted", state.accessGranted); put("connection_phase", state.phase(now).name)
             put("pairing_issue", prefs.pairingIssue)

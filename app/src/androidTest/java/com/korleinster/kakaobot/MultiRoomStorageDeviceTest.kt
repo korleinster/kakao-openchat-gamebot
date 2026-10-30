@@ -29,10 +29,10 @@ class MultiRoomStorageDeviceTest {
     }
     @Test fun pairingAndRoleChangeInOneProfileCannotResetAnother() {
         val first=BotPrefs(context,"$prefix-a");val second=BotPrefs(context,"$prefix-b")
-        first.bound="chat-a";first.running=true;first.scheduleEnabled=true;first.role=RoomRole.GAME_ALERTS
-        second.startPairing("別の試験部屋","123456",1000);second.role=RoomRole.FUN
+        first.bound="chat-a";first.running=true;first.scheduleEnabled=true;first.features=setOf(BotFeature.REPEATING_REMINDERS,BotFeature.CYCLE_REMINDERS)
+        second.startPairing("別の試験部屋","123456",1000);second.features=setOf(BotFeature.DICE,BotFeature.DRAW)
         assertEquals("chat-a",first.bound);assertTrue(first.running);assertTrue(first.scheduleEnabled)
-        assertEquals(RoomRole.GAME_ALERTS,first.role);assertEquals(RoomRole.FUN,BotPrefs(context,"$prefix-b").role)
+        assertEquals(setOf(BotFeature.REPEATING_REMINDERS,BotFeature.CYCLE_REMINDERS),first.features);assertEquals(setOf(BotFeature.DICE,BotFeature.DRAW),BotPrefs(context,"$prefix-b").features)
     }
     @Test fun identicalDeliveryIdsAndCancellationRemainInsideTheirRoom() {
         val now=Instant.now()
