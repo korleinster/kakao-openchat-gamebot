@@ -12,7 +12,12 @@ import java.time.*
 import java.util.UUID
 
 class MainActivity : Activity() {
-    private lateinit var engine: BotEngine
+    private lateinit var owner: BotEngine
+    private val engine: BotEngine get() = owner.selected
+    private lateinit var overview: TextView
+    private lateinit var role: Spinner
+    private var displayedRoom = ""
+    private var displayedRole: RoomRole? = null
     private lateinit var status: TextView
     private lateinit var connection: TextView
     private lateinit var targetRoom: EditText
@@ -31,7 +36,7 @@ class MainActivity : Activity() {
     private val refreshTask = object : Runnable { override fun run() { refresh(); handler.postDelayed(this, 1000) } }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        engine = BotEngine.get(this)
+        owner = BotEngine.get(this)
         window.statusBarColor = Color.rgb(246, 248, 250)
         window.navigationBarColor = Color.WHITE
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
@@ -43,8 +48,24 @@ class MainActivity : Activity() {
         fun toggle(label: String, block: (Boolean) -> Unit): Switch = Switch(this).apply {
             text = label; textSize = 16f; setPadding(0,dp(10),0,dp(10)); setOnCheckedChangeListener { _, value -> if (!refreshing) block(value) }; content.addView(this)
         }
-        text("게임방 도우미",28f)
-        text("시험 버전 ${engine.versionName} · 한 번에 한 방 연결")
+        text("채팅방 도우미",28f)
+        text("시험 버전 ${engine.versionName} · 방마다 연결·역할·일정 관리")
+        overview = text("등록한 방 확인 중",14f).apply { tag = "room-overview" }
+        button("관리할 방 선택") {
+            val rooms = owner.rooms()
+            AlertDialog.Builder(this).setTitle("방 선택").setItems(rooms.map { "${it.prefs.targetRoom} · ${it.prefs.role.label}" }.toTypedArray()) { _, index ->
+                owner.submit { owner.selectRoom(rooms[index].roomId) }
+            }.show()
+        }.apply { tag = "select-room" }
+        button("새 방 추가") { showRoomDialog() }.apply { tag = "add-room" }
+        role = Spinner(this).apply {
+            adapter = ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,RoomRole.entries.map { it.label })
+            tag = "room-role"; content.addView(this)
+        }
+        button("선택한 역할 적용") {
+            val chosen = RoomRole.entries[role.selectedItemPosition]
+            if(chosen != engine.prefs.role) updateRoom { it.changeRole(chosen) }
+        }.apply { tag = "apply-room-role" }
         status = text("연결 상태 확인 중",19f).apply { tag = "connection-headline" }
         connection = text("연결 상태 확인 중",14f).apply { tag = "connection-details" }
         text("연결한 대화에만 답해. 방 연결 중에는 새 카카오톡 알림의 마지막 메시지에서 연결 코드만 검사하고 다른 대화는 저장하지 않아.",14f)
@@ -58,27 +79,27 @@ class MainActivity : Activity() {
             hint = "대상 오픈채팅방 이름"; setText(engine.prefs.targetRoom); isSingleLine = true
             contentDescription = "대상 오픈채팅방 이름"; tag = "target-room-input"; content.addView(this)
         }
-        text("방 이름을 입력하고 새 코드를 만들면 기존 방 연결과 대기 중인 예약 발송이 해제돼.",13f)
+        text("방 이름을 입력하고 새 코드를 만들면 선택한 방의 기존 연결·예약 발송만 해제돼. 다른 방은 계속 동작해.",13f)
         button("입력한 방으로 연결 코드 만들기") {
             val room = try { RoomAdmission.normalizeName(targetRoom.text.toString()) } catch (_: IllegalArgumentException) { toast("방 이름을 1~80자로 입력해줘"); return@button }
             targetRoom.setText(room)
             (getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager).hideSoftInputFromWindow(targetRoom.windowToken, 0)
             targetRoom.clearFocus()
-            engine.submit { engine.beginPair(room); handler.post { refresh() } }
+            updateRoom { it.beginPair(room) }
         }.apply { tag = "create-pairing-code" }
         pair = text("연결 코드를 만든 뒤 다른 계정에서 대상 방에 입력해줘.").apply { tag = "pairing-instructions" }
-        confirm = button("이 방으로 연결 확인") { engine.submit { engine.approvePair(); handler.post { refresh() } } }.apply { tag = "confirm-room" }
+        confirm = button("이 방으로 연결 확인") { updateRoom { it.approvePair() } }.apply { tag = "confirm-room" }
         running = toggle("명령 응답 실행") { enabled ->
             if (enabled && (engine.prefs.bound.isBlank() || engine.prefs.collision)) { toast("방을 먼저 연결해줘"); refresh() }
-            else engine.submit { engine.prefs.running = enabled; engine.changedSettings(); handler.post { refresh() } }
+            else updateRoom { it.prefs.running = enabled; it.changedSettings() }
         }
         schedules = toggle("정기 일정 알림 사용") { enabled ->
             if (enabled && !engine.exactAllowed()) { toast("정시 알림 권한을 먼저 허용해줘"); refresh() }
-            else engine.submit { engine.prefs.scheduleEnabled = enabled; engine.changedSettings(); handler.post { refresh() } }
+            else updateRoom { it.prefs.scheduleEnabled = enabled && it.prefs.role.schedules; it.changedSettings() }
         }
-        morning = toggle("매일 오전 7시 일정 모아 알림") { enabled -> engine.submit { engine.prefs.morningEnabled = enabled; engine.changedSettings(); handler.post { refresh() } } }
-        empty = toggle("일정 없는 날도 아침 안내") { enabled -> engine.submit { engine.prefs.sendEmpty = enabled; engine.changedSettings(); handler.post { refresh() } } }
-        button("30초 후 시험 알림 예약") { engine.submit { engine.localTest(); handler.post { refresh() } } }
+        morning = toggle("매일 오전 7시 일정 모아 알림") { enabled -> updateRoom { it.prefs.morningEnabled = enabled; it.changedSettings() } }
+        empty = toggle("일정 없는 날도 아침 안내") { enabled -> updateRoom { it.prefs.sendEmpty = enabled; it.changedSettings() } }
+        button("30초 후 시험 알림 예약") { updateRoom { it.localTest() } }
         text("등록 일정",21f)
         text("실제 게임 일정은 아직 등록되지 않았어. 확인된 시각만 입력해줘. 일정은 한국 시간 기준이야.",14f)
         button("월드보스·정기 콘텐츠 추가") { showScheduleDialog() }
@@ -89,18 +110,42 @@ class MainActivity : Activity() {
         text("상태는 자동으로 갱신돼. ‘답장 준비’는 최근 알림 기준이고 실제 도착은 !핑으로 확인해줘. 앱을 강제 중지하거나 답장 연결이 사라지면 새 방 알림이 필요해.",13f)
         button("라이선스·원본 정보") { AlertDialog.Builder(this).setTitle("오픈소스 고지").setMessage(assets.open("third-party-notices.txt").bufferedReader().readText()).setPositiveButton("닫기", null).show() }
     }
+    private fun updateRoom(block: (BotEngine) -> Unit) {
+        val target = engine
+        target.submit { block(target); handler.post { refresh() } }
+    }
+    private fun showRoomDialog() {
+        val form = form(); val name = field(form, "오픈채팅방 이름")
+        val kind = Spinner(this).apply { adapter = ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,RoomRole.entries.map { it.label }); form.addView(this) }
+        val dialog = AlertDialog.Builder(this).setTitle("새 방 추가").setView(form).setPositiveButton("추가",null).setNegativeButton("취소",null).create()
+        dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            val roomName = try { RoomAdmission.normalizeName(name.text.toString()) } catch(_:IllegalArgumentException) { toast("방 이름을 1~80자로 입력해줘"); return@setOnClickListener }
+            if(owner.rooms().size >= 20) { toast("최대 20개 방까지 등록할 수 있어"); return@setOnClickListener }
+            val chosen = RoomRole.entries[kind.selectedItemPosition]
+            owner.submit { val room = owner.addRoom(); room.prefs.role = chosen; room.beginPair(roomName) }
+            dialog.dismiss()
+        } }; dialog.show()
+    }
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
     private fun toast(s: String) = Toast.makeText(this,s,Toast.LENGTH_LONG).show()
     override fun onResume() {
         super.onResume(); engine.addStatusListener(statusChanged)
         handler.removeCallbacks(refreshTask); handler.post(refreshTask)
-        engine.submit { engine.requestListenerConnection(); engine.tick() }
+        owner.submit { owner.requestListenerConnection(); owner.tick() }
     }
     override fun onPause() { engine.removeStatusListener(statusChanged); handler.removeCallbacks(refreshTask); super.onPause() }
     override fun onDestroy() { engine.removeStatusListener(statusChanged); handler.removeCallbacksAndMessages(null); super.onDestroy() }
     private fun refresh() {
         if (!::status.isInitialized) return
         refreshing = true
+        val engine = this.engine
+        if(displayedRoom != engine.roomId) {
+            displayedRoom = engine.roomId; displayedRole = null; targetRoom.setText(engine.prefs.targetRoom); lastDefinitionSnapshot = "<changed>"
+        }
+        overview.text = owner.rooms().joinToString("\n") { "${if(it.roomId == engine.roomId) "▶ " else ""}${it.prefs.targetRoom} · ${it.prefs.role.label} · ${it.statusLabel()}" }
+        if(displayedRole != engine.prefs.role) { displayedRole = engine.prefs.role; role.setSelection(engine.prefs.role.ordinal) }
+        schedules.isEnabled = engine.prefs.role.schedules
+        morning.isEnabled = engine.prefs.role.schedules; empty.isEnabled = engine.prefs.role.schedules
         status.text = engine.statusLabel()
         connection.text = engine.connectionDetails()
         val room = engine.prefs.targetRoom
@@ -130,6 +175,7 @@ class MainActivity : Activity() {
     private fun field(parent: LinearLayout, hint: String, value: String = ""): EditText = EditText(this).apply { this.hint = hint; setText(value); isSingleLine = true; parent.addView(this) }
     private fun form() = LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(dp(20),dp(8),dp(20),dp(8)) }
     private fun showScheduleDialog() {
+        val engine = this.engine
         val form = form(); val name = field(form,"콘텐츠 이름")
         val kind = Spinner(this).apply { adapter = ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,listOf("월드보스","정기 콘텐츠")); form.addView(this) }
         val time = field(form,"시작 시각 HH:mm"); val days=field(form,"요일 1=월 … 7=일 (예: 135)","1234567")
@@ -144,6 +190,7 @@ class MainActivity : Activity() {
         } };dialog.show()
     }
     private fun showCollectionDialog() {
+        val engine = this.engine
         val form=form();val name=field(form,"컬렉션 원본 이름");val anchor=field(form,"기준일 YYYY-MM-DD HH:mm");val months=field(form,"갱신 주기 개월 수 (1~24)");val days=field(form,"며칠 전 안내 (0~90)")
         val dialog=AlertDialog.Builder(this).setTitle("공통 컬렉션 주기 등록").setView(form).setPositiveButton("저장",null).setNegativeButton("취소",null).create()
         dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {

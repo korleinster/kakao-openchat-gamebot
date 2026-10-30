@@ -15,7 +15,7 @@
       "source_blob_shas": [
         "4ac284bf7be7f6fd4917e177c76d771013ee9139"
       ],
-      "changes": "Configurable target room, structured-title verification, native latest-message parsing, code-based pairing when group or 1:1 notifications omit the room name, identity verification, observable connection state; no AI or conversation storage"
+      "changes": "Independent multi-room profiles and identity-based routing, structured-title verification, native latest-message parsing, single active code pairing for group or 1:1 notifications without room names, duplicate-conversation blocking, observable per-room connection state; no AI or conversation storage"
     },
     {
       "local_path": "app/src/main/java/com/korleinster/kakaobot/SessionTransport.kt",
