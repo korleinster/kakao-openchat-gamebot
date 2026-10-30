@@ -59,7 +59,7 @@ class ConnectionSettingsDeviceTest {
         root.submit {
             val engine=if(args.getString("prepare_new_room")=="true") root.addRoom() else root.selected
             engine.requestListenerConnection()
-            args.getString("prepare_role")?.let { name -> engine.prefs.role=RoomRole.valueOf(name) }
+            args.getString("prepare_role")?.let { name -> engine.prefs.features=FeaturePolicy.migrateRole(name,false) }
             engine.beginPair(room!!);prepared=engine;done.countDown()
         }
         assertTrue(done.await(5,TimeUnit.SECONDS))
@@ -69,40 +69,71 @@ class ConnectionSettingsDeviceTest {
         assertFalse(engine.prefs.running);assertFalse(engine.prefs.scheduleEnabled)
     }
 
-    /** Explicitly opted-in owner-device UI test. Normal test runs never replace the real binding. */
-    @Test fun selectedRoomCreatesCodeAndUpdatesVisibleState() {
-        val room = InstrumentationRegistry.getArguments().getString("pair_test_room")
-        Assume.assumeTrue("Pass pair_test_room only for an authorized live pairing test", !room.isNullOrBlank())
-        val unlocked = !context.getSystemService(android.app.KeyguardManager::class.java).isDeviceLocked
-        val interactive = context.getSystemService(android.os.PowerManager::class.java).isInteractive
-        Assume.assumeTrue("Owner must unlock the phone and keep its display on for this foreground UI test", unlocked && interactive)
-        val engine=BotEngine.get(context).selected
-        ActivityScenario.launch<MainActivity>(Intent(context,MainActivity::class.java)).use { scenario ->
-            scenario.onActivity { activity ->
-                activity.window.decorView.findViewWithTag<EditText>("target-room-input").setText(room)
-                activity.window.decorView.findViewWithTag<Button>("create-pairing-code").performClick()
+    /** Opt-in owner test configuration; keeps pairing and all other rooms intact. */
+    @Test fun configureAuthorizedOwnerRoomWithoutChangingBinding() {
+        val args=InstrumentationRegistry.getArguments()
+        val id=args.getString("owner_test_room")
+        Assume.assumeTrue("Explicit owner-room test setup only",!id.isNullOrBlank())
+        assertTrue(context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0)
+        val root=BotEngine.get(context);assertTrue(root.consentAccepted())
+        val room=root.rooms().single { it.roomId==id }
+        val before=room.prefs.bound
+        val features=args.getString("owner_features")!!.split(',').filter { it.isNotBlank() }.map { BotFeature.valueOf(it) }.toSet()
+        val tone=BotTone.valueOf(args.getString("owner_tone")!!)
+        val done=CountDownLatch(1)
+        root.submit {
+            room.saveConfiguration(features,tone)
+            args.getString("owner_schedule_enabled")?.let { value ->
+                require(value=="true" || value=="false")
+                room.prefs.scheduleEnabled=value.toBoolean();room.changedSettings()
             }
-            val completed=CountDownLatch(1);engine.submit { completed.countDown() }
-            assertTrue(completed.await(5,TimeUnit.SECONDS)); instrumentation.waitForIdleSync()
-            var before=""
-            scenario.onActivity { activity ->
-                val details=activity.window.decorView.findViewWithTag<TextView>("connection-details").text.toString()
-                assertTrue(details.contains("대상 방: ${RoomAdmission.normalizeName(room!!)}"))
-                assertTrue(details.contains("방 연결: 코드 수신 대기"))
-                // Listener binding is asynchronous on an instrumented process start.
-                assertEquals(engine.statusLabel(),activity.window.decorView.findViewWithTag<TextView>("connection-headline").text.toString())
-                before=activity.window.decorView.findViewWithTag<TextView>("pairing-instructions").text.toString()
-            }
-            // Track the resumed Activity rather than a stale instance after recreation.
-            var after=before
-            val deadline=android.os.SystemClock.elapsedRealtime()+4000
-            while (after==before && android.os.SystemClock.elapsedRealtime()<deadline) {
-                Thread.sleep(250)
-                scenario.onActivity { activity -> after=activity.window.decorView.findViewWithTag<TextView>("pairing-instructions").text.toString() }
-            }
-            assertNotEquals(before,after)
+            done.countDown()
         }
-        assertEquals(RoomAdmission.normalizeName(room!!),engine.prefs.targetRoom)
-        assertFalse(engine.prefs.running); assertFalse(engine.prefs.scheduleEnabled)
+        assertTrue(done.await(5,TimeUnit.SECONDS));assertEquals(before,room.prefs.bound)
+        assertEquals(features,room.prefs.features);assertEquals(tone,room.prefs.tone)
+        args.getString("owner_schedule_enabled")?.let { assertEquals(it.toBoolean(),room.prefs.scheduleEnabled) }
+    }
+
+    /** Explicit foreground check using a disposable profile, preserving existing rooms. */
+    @Test fun ownerDeviceShowsFeatureCheckboxesAndTonePreview() {
+        Assume.assumeTrue(InstrumentationRegistry.getArguments().getString("owner_ui_test")=="true")
+        Assume.assumeFalse(context.getSystemService(android.app.KeyguardManager::class.java).isDeviceLocked)
+        Assume.assumeTrue(context.getSystemService(android.os.PowerManager::class.java).isInteractive)
+        val root=BotEngine.get(context)
+        Assume.assumeTrue("Owner must consent in the app before this UI test",root.consentAccepted())
+        val original=root.selectedOrNull?.roomId
+        val before=root.rooms().associate { it.roomId to listOf(it.prefs.bound,it.prefs.running.toString(),it.prefs.features.toString(),it.prefs.tone.name) }
+        var temp:BotEngine?=null
+        fun work(action:()->Unit) { val done=CountDownLatch(1);root.submit { action();done.countDown() };assertTrue(done.await(5,TimeUnit.SECONDS)) }
+        work { temp=root.addRoom();temp!!.prefs.features=emptySet() }
+        val room=temp!!
+        try {
+            ActivityScenario.launch<MainActivity>(Intent(context,MainActivity::class.java)).use { scenario ->
+                scenario.onActivity { it.window.decorView.findViewWithTag<Button>("open-room-${room.roomId}").performClick() }
+                instrumentation.waitForIdleSync()
+                val deadline=android.os.SystemClock.elapsedRealtime()+5000
+                var ready=false
+                while(!ready && android.os.SystemClock.elapsedRealtime()<deadline) {
+                    scenario.onActivity { ready=it.window.decorView.findViewWithTag<android.widget.CheckBox>("feature-DICE")!=null }
+                    if(!ready) Thread.sleep(100)
+                }
+                assertTrue(ready)
+                scenario.onActivity { activity ->
+                    val view=activity.window.decorView
+                    BotFeature.entries.forEach { assertNotNull(view.findViewWithTag<android.widget.CheckBox>("feature-${it.name}")) }
+                    BotTone.entries.forEach { assertNotNull(view.findViewWithTag<android.widget.RadioButton>("tone-${it.name}")) }
+                    val preview=view.findViewWithTag<TextView>("tone-preview")
+                    val previous=preview.text.toString()
+                    view.findViewWithTag<android.widget.RadioButton>("tone-GIRLFRIEND").performClick()
+                    assertNotEquals(previous,preview.text.toString())
+                    view.findViewWithTag<android.widget.CheckBox>("feature-DICE").performClick()
+                    assertTrue(room.prefs.features.isEmpty())
+                    view.findViewWithTag<Button>("save-room-preferences").performClick()
+                }
+                work { };instrumentation.waitForIdleSync()
+                assertEquals(setOf(BotFeature.DICE),room.prefs.features);assertEquals(BotTone.GIRLFRIEND,room.prefs.tone)
+                before.forEach { (id,value) -> val current=root.rooms().first { it.roomId==id };assertEquals(value,listOf(current.prefs.bound,current.prefs.running.toString(),current.prefs.features.toString(),current.prefs.tone.name)) }
+            }
+        } finally { work { root.removeRoom(room.roomId);if(original!=null) root.selectRoom(original) } }
     }
 }

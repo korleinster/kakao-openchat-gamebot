@@ -2,18 +2,20 @@
 set -eu
 project_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 toolchain="$project_root/work/toolchain"
-export JAVA_HOME="$toolchain/jdk-17.0.21+9/Contents/Home"
-export ANDROID_HOME="$toolchain/android-sdk"
+export JAVA_HOME="${BOT_JAVA_HOME:-$toolchain/jdk-17.0.21+9/Contents/Home}"
+export ANDROID_HOME="${BOT_ANDROID_HOME:-$toolchain/android-sdk}"
 export ANDROID_USER_HOME="$toolchain/android-user"
-export GRADLE_USER_HOME="$toolchain/gradle-user"
+export GRADLE_USER_HOME="${BOT_GRADLE_USER_HOME:-$toolchain/gradle-user}"
 if [ ! -x "$JAVA_HOME/bin/java" ]; then echo 'Prepare the pinned local JDK first.' >&2; exit 1; fi
 cd "$project_root"
 task_key=$(printf '%s' "$project_root" | shasum -a 256 | cut -c1-12)
 task_build_root="${TMPDIR:-/tmp}/kakao-openchat-gamebot-$task_key"
-if [ -x ./gradlew ]; then
-    ./gradlew "-PbotBuildRoot=$task_build_root" "$@"
+if [ -n "${BOT_GRADLE_EXECUTABLE:-}" ]; then
+    "$BOT_GRADLE_EXECUTABLE" "-PbotBuildRoot=$task_build_root" --project-cache-dir "$task_build_root/project-cache" "$@"
+elif [ -x ./gradlew ]; then
+    ./gradlew "-PbotBuildRoot=$task_build_root" --project-cache-dir "$task_build_root/project-cache" "$@"
 else
-    "$toolchain/gradle-8.9/bin/gradle" "-PbotBuildRoot=$task_build_root" "$@"
+    "$toolchain/gradle-8.13/bin/gradle" "-PbotBuildRoot=$task_build_root" --project-cache-dir "$task_build_root/project-cache" "$@"
 fi
 # Mirror only final artifacts/reports to the documented paths. Gradle never reads
 # these copies, so external synchronization cannot duplicate its intermediates.

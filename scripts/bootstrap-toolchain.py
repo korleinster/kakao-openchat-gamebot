@@ -62,9 +62,9 @@ def main():
                 if item.islnk() and not (BASE / item.linkname).resolve().is_relative_to(BASE.resolve()):
                     raise RuntimeError('Unsafe archive link')
             source.extractall(BASE)
-    gradle = BASE / 'gradle-8.9/bin/gradle'
+    gradle = BASE / 'gradle-8.13/bin/gradle'
     if not gradle.exists():
-        archive = download('gradle-8.9-bin.zip', 'https://services.gradle.org/distributions/gradle-8.9-bin.zip', 'sha256', LOCK['gradle_sha256'])
+        archive = download('gradle-8.13-bin.zip', 'https://services.gradle.org/distributions/gradle-8.13-bin.zip', 'sha256', LOCK['gradle_sha256'])
         extract_zip(archive, BASE)
     sdk = BASE / 'android-sdk'
     tools = sdk / 'cmdline-tools/19.0'
@@ -76,11 +76,11 @@ def main():
         (staging / 'cmdline-tools').rename(tools)
     environment = os.environ.copy()
     environment.update(JAVA_HOME=str(java_home), ANDROID_USER_HOME=str(BASE / 'android-user'))
-    packages = [(sdk/'platforms/android-35/android.jar'), (sdk/'build-tools/34.0.0/aapt2')]
+    packages = [(sdk/'platforms/android-36/android.jar'), (sdk/'build-tools/35.0.0/aapt2')]
     if not all(p.exists() for p in packages):
         # Direct Java invocation preserves paths containing spaces. The SDK CLI
         # presents its own package license prompt when approval is still needed.
-        subprocess.run([str(java_home/'bin/java'), '-Dcom.android.sdklib.toolsdir='+str(tools), '-classpath', str(tools/'lib/sdkmanager-classpath.jar'), 'com.android.sdklib.tool.sdkmanager.SdkManagerCli', '--sdk_root='+str(sdk), 'platforms;android-35', 'build-tools;34.0.0'], env=environment, check=True)
+        subprocess.run([str(java_home/'bin/java'), '-Dcom.android.sdklib.toolsdir='+str(tools), '-classpath', str(tools/'lib/sdkmanager-classpath.jar'), 'com.android.sdklib.tool.sdkmanager.SdkManagerCli', '--sdk_root='+str(sdk), 'platforms;android-36', 'build-tools;35.0.0'], env=environment, check=True)
     (ROOT/'local.properties').write_text('sdk.dir='+str(sdk)+'\n')
     keystore = BASE/'debug.keystore'
     if not keystore.exists():
