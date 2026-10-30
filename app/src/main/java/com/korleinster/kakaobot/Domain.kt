@@ -8,6 +8,27 @@ import java.text.Normalizer
 const val DEFAULT_TARGET_ROOM = "봇테스트"
 val GAME_ZONE: ZoneId = ZoneId.of("Asia/Seoul")
 
+enum class RoomRole(val label: String, val schedules: Boolean, val games: Boolean) {
+    MIXED("알림 + 오락", true, true), GAME_ALERTS("게임 일정 알림", true, false), FUN("오락", false, true);
+    fun allows(command: String): Boolean = when(command.trim().substringBefore(' ')) {
+        "!핑", "!도움말" -> true
+        "!오늘", "!월보", "!정기", "!컬렉션", "!알림테스트" -> schedules
+        "!주사위", "!뽑기" -> games
+        else -> false
+    }
+    fun help(): String = "이 방의 역할: $label\n!핑 · !도움말" +
+        (if(schedules) "\n!오늘 · !월보 · !정기 · !컬렉션 · !알림테스트" else "") +
+        (if(games) "\n!주사위 [최댓값] · !뽑기 이름1 이름2 ..." else "")
+}
+
+object RoomRouting {
+    /** Conversation identity, never display name or the room selected in the UI. */
+    fun owner(identity: String, bindings: List<Pair<String, String>>): String? =
+        bindings.filter { it.second.isNotBlank() && it.second == identity }.singleOrNull()?.first
+    fun ambiguous(identity: String, bindings: List<Pair<String, String>>): Boolean =
+        bindings.count { it.second.isNotBlank() && it.second == identity } > 1
+}
+
 object RoomAdmission {
     fun normalizeName(name: String): String = Normalizer.normalize(name.trim(), Normalizer.Form.NFC).also {
         require(it.isNotBlank() && it.length <= 80 && it.none(Char::isISOControl))

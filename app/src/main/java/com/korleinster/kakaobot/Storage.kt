@@ -12,6 +12,7 @@ import java.time.*
 @android.annotation.SuppressLint("ApplySharedPref")
 class BotPrefs(context: Context, file: String = "bot-settings") {
     private val p = context.getSharedPreferences(file, Context.MODE_PRIVATE)
+    var role: RoomRole get() = RoomRole.entries.firstOrNull { it.name == p.getString("role", "") } ?: RoomRole.MIXED; set(v) { p.edit().putString("role", v.name).commit() }
     val targetRoom: String get() = p.getString("targetRoom", DEFAULT_TARGET_ROOM)!!
     var pairingIssue: String get() = p.getString("pairingIssue", "")!!; set(v) { p.edit().putString("pairingIssue", v).commit() }
     var running: Boolean get() = p.getBoolean("running", false); set(v) { p.edit().putBoolean("running", v).commit() }
@@ -144,5 +145,21 @@ class BotDb(context: Context, name: String = "bot.db") : SQLiteOpenHelper(contex
     }
     fun counts(): JSONObject = JSONObject().apply {
         readableDatabase.rawQuery("SELECT state,COUNT(*) FROM deliveries GROUP BY state", null).use { c -> while (c.moveToNext()) put(c.getString(0), c.getInt(1)) }
+    }
+}
+
+/** Registry contains local profile IDs only. Legacy settings/database stay in place. */
+@android.annotation.SuppressLint("ApplySharedPref")
+class RoomDirectory(context: Context, file: String = "room-directory") {
+    private val p = context.getSharedPreferences(file, Context.MODE_PRIVATE)
+    fun ids(): List<String> = listOf("legacy") + p.getString("ids", "")!!.split(',').filter { it.matches(Regex("[a-f0-9-]{36}")) }.distinct()
+    var selected: String
+        get() = p.getString("selected", "legacy")!!.takeIf { it in ids() } ?: "legacy"
+        set(id) { require(id in ids()); check(p.edit().putString("selected", id).commit()) }
+    fun add(): String {
+        require(ids().size < 20) { "최대 20개 방까지 등록할 수 있어" }
+        val id = java.util.UUID.randomUUID().toString()
+        check(p.edit().putString("ids", (ids().drop(1) + id).joinToString(",")).putString("selected", id).commit())
+        return id
     }
 }

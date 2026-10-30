@@ -53,9 +53,17 @@ class ConnectionSettingsDeviceTest {
         val room=InstrumentationRegistry.getArguments().getString("prepare_pairing_room")
         Assume.assumeTrue("Explicit owner-device preparation only", !room.isNullOrBlank())
         assertTrue(context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0)
-        val done=CountDownLatch(1);val engine=BotEngine.get(context)
-        engine.submit { engine.requestListenerConnection();engine.beginPair(room!!);done.countDown() }
+        val done=CountDownLatch(1);val root=BotEngine.get(context)
+        val args=InstrumentationRegistry.getArguments()
+        var prepared:BotEngine?=null
+        root.submit {
+            val engine=if(args.getString("prepare_new_room")=="true") root.addRoom() else root.selected
+            engine.requestListenerConnection()
+            args.getString("prepare_role")?.let { name -> engine.prefs.role=RoomRole.valueOf(name) }
+            engine.beginPair(room!!);prepared=engine;done.countDown()
+        }
         assertTrue(done.await(5,TimeUnit.SECONDS))
+        val engine=prepared!!
         assertEquals(RoomAdmission.normalizeName(room!!),engine.prefs.targetRoom)
         assertTrue(engine.prefs.code.matches(Regex("[0-9]{6}")))
         assertFalse(engine.prefs.running);assertFalse(engine.prefs.scheduleEnabled)
@@ -68,7 +76,7 @@ class ConnectionSettingsDeviceTest {
         val unlocked = !context.getSystemService(android.app.KeyguardManager::class.java).isDeviceLocked
         val interactive = context.getSystemService(android.os.PowerManager::class.java).isInteractive
         Assume.assumeTrue("Owner must unlock the phone and keep its display on for this foreground UI test", unlocked && interactive)
-        val engine=BotEngine.get(context)
+        val engine=BotEngine.get(context).selected
         ActivityScenario.launch<MainActivity>(Intent(context,MainActivity::class.java)).use { scenario ->
             scenario.onActivity { activity ->
                 activity.window.decorView.findViewWithTag<EditText>("target-room-input").setText(room)

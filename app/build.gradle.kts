@@ -6,8 +6,8 @@ android {
         applicationId = "com.korleinster.kakaobot"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.1.1-test"
+        versionCode = 3
+        versionName = "0.2.0-test"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     signingConfigs.getByName("debug") { storeFile = rootProject.file("work/toolchain/debug.keystore") }
