@@ -5,6 +5,8 @@ import android.content.*
 import android.os.Build
 import android.provider.Settings
 import org.json.JSONObject
+import org.json.JSONArray
+import java.util.concurrent.ConcurrentHashMap
 import java.io.File
 import java.time.*
 import java.util.UUID
@@ -13,35 +15,51 @@ import java.util.concurrent.CopyOnWriteArraySet
 
 class BotApp : Application() { override fun onCreate() { super.onCreate(); BotEngine.get(this) } }
 
-class BotEngine private constructor(private val context: Application) {
+class BotEngine private constructor(private val context: Application, val roomId: String = "legacy", private val coordinator: BotEngine? = null) {
     companion object {
         @Volatile private var instance: BotEngine? = null
         fun get(context: Context): BotEngine = instance ?: synchronized(this) { instance ?: BotEngine(context.applicationContext as Application).also { instance = it } }
     }
-    val prefs = BotPrefs(context)
-    val db = BotDb(context)
+    private val root: BotEngine get() = coordinator ?: this
+    private val directory by lazy { RoomDirectory(context) }
+    private val roomEngines = ConcurrentHashMap<String, BotEngine>()
+    val selected: BotEngine get() = root.room(root.directory.selected)
+    fun rooms(): List<BotEngine> = root.directory.ids().map { root.room(it) }
+    private fun room(id: String): BotEngine = if(id == "legacy") root else root.roomEngines.computeIfAbsent(id) { BotEngine(context, id, root) }
+    fun selectRoom(id: String) { root.directory.selected = id; report() }
+    fun addRoom(): BotEngine = root.room(root.directory.add()).also { it.report() }
+    val prefs = BotPrefs(context, if(roomId == "legacy") "bot-settings" else "room-$roomId")
+    val db = BotDb(context, if(roomId == "legacy") "bot.db" else "room-$roomId.db")
     val transport = SessionTransport(context)
     val versionName: String = context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "unknown"
     private val statusListeners = CopyOnWriteArraySet<() -> Unit>()
-    private val executor = Executors.newSingleThreadExecutor()
+    private val executor: java.util.concurrent.ExecutorService = coordinator?.executor ?: Executors.newSingleThreadExecutor()
     private val alarm = context.getSystemService(AlarmManager::class.java)
     private val alarmIntent: PendingIntent get() = PendingIntent.getBroadcast(context, 1, Intent(context, AlarmReceiver::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-    init { db.recoverAfterProcessLoss(); submit { tick() } }
+    init { db.recoverAfterProcessLoss(); if(coordinator == null) submit { tick() } }
     fun submit(block: () -> Unit) { executor.execute { try { block() } catch (_: Exception) { db.log("작업 오류 · 개인정보 미기록"); report() } } }
     fun exactAllowed(): Boolean = Build.VERSION.SDK_INT < 31 || alarm.canScheduleExactAlarms()
-    fun addStatusListener(listener: () -> Unit) { statusListeners.add(listener) }
-    fun removeStatusListener(listener: () -> Unit) { statusListeners.remove(listener) }
+    fun addStatusListener(listener: () -> Unit) { root.statusListeners.add(listener) }
+    fun removeStatusListener(listener: () -> Unit) { root.statusListeners.remove(listener) }
     fun requestListenerConnection() {
         if (notificationAccessGranted() && !NotificationBridge.connected) {
             android.service.notification.NotificationListenerService.requestRebind(ComponentName(context, NotificationBridge::class.java))
         }
     }
     fun beginPair(room: String = prefs.targetRoom) {
+        rooms().filter { it.roomId != roomId }.forEach { other ->
+            // One pairing operation at a time; already bound rooms keep running.
+            other.prefs.code = ""; other.prefs.codeExpires = 0; other.prefs.pairingIssue = ""
+            if(other.prefs.candidate.isNotBlank()) { other.prefs.candidate = ""; other.transport.clear() }
+        }
         prefs.startPairing(room, pairingCode(), System.currentTimeMillis())
         db.cancelAll(); transport.clear(); db.log("대상 방 연결 코드 생성"); tick()
     }
     fun approvePair() {
         if (prefs.candidate.isBlank() || !transport.available(prefs.candidate)) { db.log("방 알림을 먼저 받아야 함"); report(); return }
+        if(rooms().any { it.roomId != roomId && it.prefs.bound == prefs.candidate }) {
+            prefs.pairingIssue = "이미 다른 방 설정에 연결된 대화야."; prefs.candidate = ""; transport.clear(); report(); return
+        }
         prefs.bound = prefs.candidate; prefs.candidate = ""; prefs.code = ""; prefs.codeExpires = 0
         prefs.collision = false; db.log("대상 방 연결 확인 완료"); tick()
     }
@@ -51,6 +69,12 @@ class BotEngine private constructor(private val context: Application) {
         prefs.lastTargetReceivedAt = System.currentTimeMillis()
         db.log("연결 코드 수신 · 답장 준비 실패"); db.log(diagnostics); report()
     }
+    fun changeRole(role: RoomRole) {
+        prefs.role = role
+        if(!role.schedules) prefs.scheduleEnabled = false
+        changedSettings()
+    }
+    fun clearReplyCapabilities() { rooms().forEach { it.transport.clear() }; report() }
     fun changedSettings() { prefs.generation += 1; db.cancelAll(); tick() }
     fun onTargetMessage(identity: String, eventId: String, text: String, cap: ReplyCapability, processCommand: Boolean) {
         val now = Instant.now()
@@ -66,7 +90,9 @@ class BotEngine private constructor(private val context: Application) {
         prefs.lastTargetReceivedAt = System.currentTimeMillis()
         if (!prefs.running || prefs.collision || !db.observe(eventId, now)) { report(); return }
         val command = text.trim()
+        if(!prefs.role.allows(command)) { report(); return }
         val response = when (command) {
+            "!도움말" -> prefs.role.help()
             "!오늘", "!월보", "!정기", "!컬렉션" -> scheduleReply(command, now)
             "!알림테스트" -> {
                 if (!exactAllowed()) "앱에서 정시 알림 권한을 먼저 허용해줘." else {
@@ -98,9 +124,20 @@ class BotEngine private constructor(private val context: Application) {
         db.enqueue(Notice("test:${UUID.randomUUID()}", null, 0, due, due.plusSeconds(60), "[시험 알림] 앱에서 예약한 30초 시험 알림", "TEST"), prefs.generation); tick()
     }
     fun tick() {
+        if(coordinator != null) { root.tick(); return }
+        val all = rooms()
+        all.forEach { room -> try { room.processTick() } catch (_: Exception) { room.db.log("이 방 작업 오류 · 다른 방 처리 계속") } }
+        alarm.cancel(alarmIntent)
+        if(exactAllowed()) all.filter { it.prefs.running && !it.prefs.collision }.mapNotNull { it.db.nextWake(Instant.now()) }.minOrNull()?.let { next ->
+            try { alarm.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, next, alarmIntent) }
+            catch (_: SecurityException) { db.log("정시 알림 권한 필요") }
+        }
+        report()
+    }
+    private fun processTick() {
         val now = Instant.now()
         db.expire(now)
-        val planned = if (prefs.running && prefs.scheduleEnabled && prefs.bound.isNotBlank()) Planner.plan(db.definitions(), now, prefs.morningEnabled, prefs.sendEmpty).map { it.copy(id="${prefs.bound.take(16)}:${it.id}") } else emptyList()
+        val planned = if (prefs.running && prefs.role.schedules && prefs.scheduleEnabled && prefs.bound.isNotBlank()) Planner.plan(db.definitions(), now, prefs.morningEnabled, prefs.sendEmpty).map { it.copy(id="${prefs.bound.take(16)}:${it.id}") } else emptyList()
         db.reconcile(planned, prefs.generation)
         if (prefs.running && prefs.bound.isNotBlank() && !prefs.collision) {
             db.due(now).forEach { d ->
@@ -125,11 +162,6 @@ class BotEngine private constructor(private val context: Application) {
                 }
             }
         }
-        alarm.cancel(alarmIntent)
-        if (prefs.running && exactAllowed()) db.nextWake(Instant.now())?.let { next ->
-            try { alarm.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, next, alarmIntent) } catch (_: SecurityException) { db.log("정시 알림 권한 필요") }
-        }
-        report()
     }
     fun notificationAccessGranted(): Boolean {
         val component = ComponentName(context, NotificationBridge::class.java)
@@ -162,12 +194,20 @@ class BotEngine private constructor(private val context: Application) {
         val last = prefs.lastTargetReceivedAt.takeIf { it > 0 }?.let { Instant.ofEpochMilli(it).atZone(GAME_ZONE).format(java.time.format.DateTimeFormatter.ofPattern("MM-dd HH:mm:ss")) } ?: "아직 없음"
         return "알림 접근: ${if(state.accessGranted) "허용됨" else "허용 필요"}\n" +
             "알림 수신 연결: ${if(state.listenerConnected) "연결됨" else "연결 대기"}\n" +
-            "대상 방: ${prefs.targetRoom}\n방 연결: $roomState\n답장 준비: $replyState\n" +
+            "대상 방: ${prefs.targetRoom}\n역할: ${prefs.role.label}\n방 연결: $roomState\n답장 준비: $replyState\n" +
             "명령 응답: ${if(state.running) "켜짐" else "꺼짐"}\n마지막 방 알림: $last"
     }
     fun report() {
+        if(coordinator != null) { root.report(); return }
+        val json = selected.statusJson().apply { put("rooms", JSONArray(rooms().map { it.statusJson() })); put("selected_room_id", selected.roomId) }
+        val target = File(context.filesDir, "status.json"); val temp = File(context.filesDir, "status.tmp")
+        temp.writeText(json.toString(2)); if (!temp.renameTo(target)) { target.writeText(json.toString(2)); temp.delete() }
+        statusListeners.forEach { it() }
+    }
+    private fun statusJson(): JSONObject {
         val state = connectionState(); val now = System.currentTimeMillis()
-        val json = JSONObject().apply {
+        return JSONObject().apply {
+            put("room_id", roomId); put("role", prefs.role.name)
             put("app_version", versionName); put("target_room", prefs.targetRoom); put("status", state.phase(now).label)
             put("notification_access_granted", state.accessGranted); put("connection_phase", state.phase(now).name)
             put("pairing_issue", prefs.pairingIssue)
@@ -177,9 +217,6 @@ class BotEngine private constructor(private val context: Application) {
             put("session_available", transport.available(prefs.bound)); put("identity_collision", prefs.collision); put("exact_alarm_allowed", exactAllowed())
             put("counts", db.counts()); put("updated_at", Instant.now().toString())
         }
-        val target = File(context.filesDir, "status.json"); val temp = File(context.filesDir, "status.tmp")
-        temp.writeText(json.toString(2)); if (!temp.renameTo(target)) { target.writeText(json.toString(2)); temp.delete() }
-        statusListeners.forEach { it() }
     }
 }
 

@@ -63,6 +63,12 @@
       "url": "https://www.notion.so/408e60ccff0c8198a94cd84f56f63b14",
       "title": "10 구현 현황·테스트 기록",
       "local_path": "docs/10-implementation-status.md"
+    },
+    {
+      "id": "409e60cc-ff0c-81b4-9bdf-c37c40c92eba",
+      "url": "https://www.notion.so/409e60ccff0c81b49bdfc37c40c92eba",
+      "title": "11 다중 방·역할 분리 기획 및 설계",
+      "local_path": "docs/11-multi-room-roles.md"
     }
   ]
 }

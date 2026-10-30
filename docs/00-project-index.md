@@ -1,6 +1,8 @@
 리니지2M 오픈채팅 일정 알림과 미니게임 프로젝트. 최종 갱신: <date start="2026-10-30" time-zone="Asia/Seoul" />.
 
-현재 단계: Android 시험 앱 0.1.1-test 설치 완료. 단위 검사 24개와 폰 DB·설정·화면·조회 검사 9개 통과. 1:1 시험에 이어 다른 그룹방에서도 실시간 코드 수신 표시·실제 답장·30초 예약 알림을 확인했다. 운영 일정·장시간 안정성 검증은 남아 있다.
+현재 단계: Android 시험 앱 0.2.0-test의 다중 방·역할 분리 구현·폰 설치 완료. 단위 검사 29개와 폰의 독립 DB·설정 검사 11개 통과. 기존 연결·실행 설정 보존 확인. 새 화면·두 방 병행 실제 도착, 운영 일정·장시간 안정성 검증은 남아 있다.
+
+신규 기능: 여러 방의 독립 연결·방별 역할·일정·전송 기록 분리. 실제 방별 역할은 미정이며 앱에서 초기 역할을 선택한다. 상세 범위·검증 현황은 11 문서에서 관리한다.
 
 ## 핵심 요구사항
 
@@ -26,6 +28,8 @@ MIT 코드의 필요한 부분만 선별 활용하는 독립 앱을 준비한다
 - <mention url="https://app.notion.com/p/408e60ccff0c81d19d00ea5664cddef3?pvs=204">08 결정 사항·미정 항목·변경 이력</mention>
 - <mention url="https://app.notion.com/p/408e60ccff0c81349e76c033c272268b?pvs=204">09 Android 원격 작업 준비·연결 기록</mention>
 - <mention url="https://app.notion.com/p/408e60ccff0c8198a94cd84f56f63b14">10 구현 현황·테스트 기록</mention>
+
+- <mention url="https://www.notion.so/409e60ccff0c81b49bdfc37c40c92eba">11 다중 방·역할 분리 기획 및 설계</mention>
 
 ## 다음 작업
 

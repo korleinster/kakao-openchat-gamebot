@@ -1,14 +1,15 @@
-# Lineage 2M Kakao Open Chat Bot
+# Kakao Open Chat Room Bot
 
-A dedicated Android test application for Lineage 2M announcements and lightweight open-chat games.
+An Android test application for room-specific announcements and lightweight open-chat games, including Lineage 2M schedules.
 
 Independently maintained by [korleinster](https://github.com/korleinster), with selected notification/reply transport portions adapted from [bssm-oss/kakao-talk-auto-bot](https://github.com/bssm-oss/kakao-talk-auto-bot). Credit for those portions belongs to the original kakao-talk-auto-bot contributors.
 
 ## Current scope
 
-Version `0.1.1-test` processes **one explicitly paired conversation**. Enter the target room name in the app and create a five-minute pairing code. Creating a new code disables responses and schedules, clears the previous binding, and cancels pending deliveries. This is an owner-device prototype, not a general KakaoTalk integration or a production release.
+Version `0.2.0-test` manages **multiple independently paired conversations**, with a role, schedules, delivery records, and response controls for each room. Add a room in the app, choose its role, and create a five-minute pairing code. Re-pairing resets only that room; other confirmed rooms keep their settings. One pairing operation is active at a time, with up to 20 registered profiles in this test version. This is an owner-device prototype, not a general KakaoTalk integration or a production release.
 
-- Pair a room using a short-lived code and confirm it locally.
+- Pair each room using a short-lived code and confirm it locally. The phone’s KakaoTalk account must already participate in the conversation; adding an app profile does not create or join a KakaoTalk room.
+- Choose a room role: game announcements, games, or both. Help and allowed commands follow that role. Switching to games disables that room’s automatic schedules; switching back requires enabling them again.
 - See notification permission, listener connection, pairing progress, reply readiness, and last room notification separately; receive state-change updates while the app is open.
 - Answer `!핑`, `!도움말`, `!오늘`, `!월보`, `!정기`, `!컬렉션`.
 - Play `!주사위 [maximum]` and `!뽑기 name1 name2 ...`.
@@ -17,13 +18,15 @@ Version `0.1.1-test` processes **one explicitly paired conversation**. Enter the
 - Register shared collection cycles using an original calendar-month anchor and a reminder offset.
 - Persist schedule and delivery state, claim work atomically, and avoid replaying dispatches with unknown outcomes.
 
-No real game schedules or collection dates are bundled. Automatic schedule sending starts disabled. The application has no Internet permission and does not persist messages from other rooms. Android notification access is still a broad OS permission. Normally the application filters by a structured conversation title or the paired identity before content processing. KakaoTalk can omit the room name even in group notifications, and its title can contain the sender's name. During the five-minute pairing window, only the latest message of a new notification with stable identity is checked for the exact code, unless an explicit structured room title contradicts the configured room. The owner must verify where they sent the code and confirm the candidate locally. Unmatched content and older messages are not stored or processed as commands.
+No real game schedules or collection dates are bundled. Automatic schedule sending starts disabled. The application has no Internet permission and does not persist messages from unpaired rooms. Android notification access is still a broad OS permission. Normally the application filters by a structured conversation title or the paired identity before content processing. KakaoTalk can omit the room name even in group notifications, and its title can contain the sender's name. During the five-minute pairing window, only the latest message of a new notification with stable identity is checked for the exact code, unless an explicit structured room title contradicts the configured room. The owner must verify where they sent the code and confirm the candidate locally. Unmatched content and older messages are not stored or processed as commands.
 
 ## Verified prototype behavior
 
 The initial `0.1.0-test` check on October 29, 2026 confirmed four actual replies (`!핑`, `!주사위 100`, `!뽑기`, and `!알림테스트`) plus the scheduled 30-second notification in the one-to-one test open chat. The phone recorded five accepted requests. The display was turned off before the test; continuous secure-lock/Doze state and precise arrival latency were not measured. Fifteen unit tests and five device database tests passed at that stage.
 
 Version `0.1.1-test` was also verified in a separately configured group open chat: the owner saw the pairing state update without reopening the app, then confirmed the ping reply, test acknowledgement, and scheduled notification. The phone's accepted-request count increased from five to eight. The display was turned off during this follow-up test. Twenty-four unit tests and nine device database/settings/UI/package-visibility checks passed; a separate debug-only pairing preparation helper was also exercised. Long idle periods, reboot recovery, and real game schedules remain pending.
+
+Version `0.2.0-test` passes 29 unit tests, 11 isolated device database/settings tests, and lint. Installation preserved the existing room binding and response settings. Two-room live replies and the new room-management UI still require owner-device acceptance; the earlier `0.1.1-test` results above cover one room.
 
 ## Development
 
@@ -50,9 +53,15 @@ scripts/adb.sh shell am instrument -w com.korleinster.kakaobot.test/androidx.tes
 
 Default device tests use disposable databases and settings files. Live tests are explicitly opted in: `pair_test_room` can create a new real binding attempt for foreground UI validation, and `prepare_pairing_room` can prepare an owner-authorized code in a debug build without accessing the screen. They reset the existing binding and pending deliveries. Neither adds an exported control endpoint to the main app.
 
-Grant notification access to the app explicitly on the phone. Enter the target room name, create a pairing code, send it from another account to that conversation, confirm the candidate in the app, then enable command responses. Keep the bot app open to watch its countdown and state updates; keep KakaoTalk out of the foreground so its message notifications can reach the listener. Verify every test reply in the actual chat. Notification access being allowed does not itself mean a room has been paired, and cached reply information is not a live Kakao server connection check.
+Grant notification access to the app explicitly on the phone. Use “새 방 추가” to register another room, enter its name and role, send the generated code from another account to that conversation, confirm the candidate in the app, then enable its command responses. Use “관리할 방 선택” to change the room shown in settings. Incoming notifications are routed by their confirmed conversation identity, independently of the selected settings screen. Keep the bot app open to watch its countdown and state updates; keep KakaoTalk out of the foreground so its message notifications can reach the listener. Verify every test reply in the actual chat. Notification access being allowed does not itself mean a room has been paired, and cached reply information is not a live Kakao server connection check.
 
 The source APK is `app/build/outputs/apk/debug/app-debug.apk`. Build output, tool binaries, device screenshots, raw logs and signing keys are ignored by Git.
+
+## Room isolation
+
+Each new profile uses a local UUID, separate settings, and a separate SQLite database. Existing `bot-settings` and `bot.db` remain the first profile, with the combined role as the default. Choose a role and press “선택한 역할 적용” to save it. Changing a role preserves the binding and schedule definitions, cancels that room’s pending deliveries, and recalculates eligible future work. The earliest wake-up across all rooms drives one app alarm. Android’s app-level idle restrictions still apply across rooms. A conversation already bound to another profile cannot be paired again; ambiguous identity blocks the affected profiles.
+
+The role presets control the existing command modules. Natural-language AI personas, custom modules, per-member administrator authorization, and long-running multi-room acceptance are separate future work. See `docs/11-multi-room-roles.md` for requirements and validation status.
 
 ## Delivery and screen limitations
 
