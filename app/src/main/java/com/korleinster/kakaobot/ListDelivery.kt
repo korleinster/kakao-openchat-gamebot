@@ -88,8 +88,9 @@ object ListDelivery {
                             else -> "동기화 완료 · v${room.db.webVersion()}"
                         }
                         // Acknowledgement follows durable application; retries never reapply unchanged lists.
-                        if(room.db.syncPending()==null && room.db.webVersion()>0) io.execute {
-                            runCatching {request(server,"/device/sync/ack",token,JSONObject().put("version",room.db.webVersion()))}
+                        val appliedVersion=room.db.webVersion()
+                        if(room.db.syncPending()==null && appliedVersion>0) io.execute {
+                            if(current()) runCatching {request(server,"/device/sync/ack",token,JSONObject().put("version",appliedVersion))}
                                 .onFailure {if(current()) {room.prefs.webStatus="목록 반영됨 · 완료 확인 재시도 필요";room.report()}}
                         }
                     } catch(e:Exception) {if(current()) room.prefs.webStatus=failure(e)} finally {
