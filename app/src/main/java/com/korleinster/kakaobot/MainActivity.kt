@@ -224,10 +224,8 @@ class MainActivity : ComponentActivity() {
             if(room.db.syncConflict()!=null) {
                 text(web,"동시 수정된 목록이 있어요. 앱 변경과 서버 변경 중 어떤 목록을 사용할지 선택하세요.",15f,true)
                 val remote=room.db.syncConflict()!!.getJSONObject("list")
-                val rows=remote.getJSONArray("definitions")
-                text(web,"앱 목록 · ${room.db.definitions().joinToString { it.name }.ifBlank { "알림 없음" }}",14f)
-                text(web,"서버 목록 · ${(0 until rows.length()).joinToString { rows.getJSONObject(it).getString("name") }.ifBlank { "알림 없음" }}",14f)
-                text(web,"서버 아침 요약 · ${remote.getJSONObject("summary").getString("time")}",14f,muted=true)
+                text(web,conflictPreview("앱 목록",room.currentReminderList()),14f)
+                text(web,conflictPreview("서버 목록",remote),14f)
                 button(web,"서버 목록 사용") { confirm("서버 목록 사용","아직 전송되지 않은 앱 변경을 서버 목록으로 바꿀까요?") { update(room) { it.db.resolveRemote();it.changedSettings();ListDelivery.sync(it) } } }
                 button(web,"앱 목록 사용") { confirm("앱 목록 사용","앱의 현재 목록으로 서버 목록을 바꿀까요? 이후 다른 곳에서 또 수정됐다면 다시 확인해요.") { update(room) { it.db.resolveLocal();ListDelivery.sync(it) } } }
             }
@@ -266,6 +264,15 @@ class MainActivity : ComponentActivity() {
         text(page,"시각은 한국 시간 기준이에요. 메신저 알림·절전 설정에 따라 늦거나 도착하지 않을 수 있어요.",13f,muted=true)
     }
     private fun dayLabel(day:DayOfWeek)=listOf("월","화","수","목","금","토","일")[day.value-1]
+    private fun conflictPreview(title:String,list:org.json.JSONObject):String {
+        val rows=list.getJSONArray("definitions")
+        val entries=(0 until rows.length()).map { definitionFromJson(rows.getJSONObject(it).toString()) }.map { d ->
+            val schedule=if(d.isMonthly) "${d.anchor} · ${d.intervalMonths}개월마다 · ${d.noticeDays}일 전" else "${d.weekdays.sortedBy { it.value }.joinToString { dayLabel(it) }} ${d.time} · ${d.leadMinutes}분 전"
+            "${d.name} · $schedule${if(d.enabled) "" else " · 꺼짐"}"
+        }
+        val summary=list.getJSONObject("summary")
+        return "$title\n"+entries.joinToString("\n").ifBlank { "알림 없음" }+"\n아침 요약 · ${if(summary.getBoolean("enabled")) summary.getString("time") else "꺼짐"} · ${if(summary.getBoolean("sendEmpty")) "빈 날도 안내" else "일정 있는 날만"}"
+    }
     private fun updateSummary(room:BotEngine,key:String,value:Any,baseVersion:Long) {
         update(room) { engine -> engine.editReminderList(baseVersion) {
             val summary=engine.currentReminderList().getJSONObject("summary").put(key,value)
