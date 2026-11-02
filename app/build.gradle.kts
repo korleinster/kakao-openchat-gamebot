@@ -8,8 +8,8 @@ android {
         applicationId = "com.korleinster.kakaobot"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.3.0"
+        versionCode = 6
+        versionName = "0.5.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildToolsVersion = "35.0.0"
@@ -26,7 +26,12 @@ android {
             keyAlias = upload.getProperty("keyAlias"); keyPassword = upload.getProperty("keyPassword")
         }
     }
-    buildTypes { release {
+    buildTypes {
+        getByName("debug") {
+            // Disposable side-by-side device verification; never replaces the owner's bot.
+            if(providers.gradleProperty("botQa").orNull == "true") applicationIdSuffix = ".webqa"
+        }
+        release {
         isMinifyEnabled = false
         isDebuggable = false
         if(uploadFile.exists()) signingConfig = signingConfigs.getByName("upload")

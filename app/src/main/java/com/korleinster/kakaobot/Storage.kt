@@ -27,6 +27,14 @@ class BotPrefs(context: Context, file: String = "bot-settings") {
             .putBoolean("schedule", scheduleEnabled && FeaturePolicy.hasAlerts(selected)).commit())
     }
     fun clear() { check(p.edit().clear().commit()) }
+    val webRoomKey: String get() = p.getString("webRoomKey", "")!!
+    val webServer: String get() = p.getString("webServer", "")!!
+    val webToken: String get() = p.getString("webToken", "")!!
+    var webStatus: String get() = p.getString("webStatus", "웹 연결 안 됨")!!
+        set(v) { check(p.edit().putString("webStatus", v).commit()) }
+    fun webConnection(key: String, token: String, server: String = "") {
+        check(p.edit().putString("webRoomKey", key).putString("webToken", token).putString("webServer",server).commit())
+    }
     val targetRoom: String get() = p.getString("targetRoom", DEFAULT_TARGET_ROOM)!!
     var pairingIssue: String get() = p.getString("pairingIssue", "")!!; set(v) { p.edit().putString("pairingIssue", v).commit() }
     var running: Boolean get() = p.getBoolean("running", false); set(v) { p.edit().putBoolean("running", v).commit() }
@@ -66,15 +74,40 @@ fun definitionFromJson(text: String): Definition = JSONObject(text).let { j ->
 
 data class Delivery(val notice: Notice, val state: DispatchState, val generation: Long)
 
-class BotDb(context: Context, name: String = "bot.db") : SQLiteOpenHelper(context, name, null, 1) {
+class BotDb(context: Context, name: String = "bot.db") : SQLiteOpenHelper(context, name, null, 3) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE definitions(id TEXT PRIMARY KEY, revision INTEGER NOT NULL, enabled INTEGER NOT NULL, json TEXT NOT NULL)")
         db.execSQL("CREATE TABLE deliveries(id TEXT PRIMARY KEY, source_id TEXT, revision INTEGER NOT NULL, generation INTEGER NOT NULL, due INTEGER NOT NULL, expires INTEGER NOT NULL, body TEXT NOT NULL, kind TEXT NOT NULL, state TEXT NOT NULL, error TEXT)")
         db.execSQL("CREATE INDEX delivery_due ON deliveries(state,due)")
         db.execSQL("CREATE TABLE observed(id TEXT PRIMARY KEY, seen INTEGER NOT NULL)")
         db.execSQL("CREATE TABLE records(seq INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, code TEXT NOT NULL)")
+        db.execSQL("CREATE TABLE web_list(singleton INTEGER PRIMARY KEY CHECK(singleton=1), version INTEGER NOT NULL, summary TEXT NOT NULL)")
+        db.execSQL("CREATE TABLE sync_queue(singleton INTEGER PRIMARY KEY CHECK(singleton=1), pending TEXT, conflict TEXT)")
     }
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        if(oldVersion < 2) db.execSQL("CREATE TABLE web_list(singleton INTEGER PRIMARY KEY CHECK(singleton=1), version INTEGER NOT NULL, summary TEXT NOT NULL)")
+        if(oldVersion < 3) db.execSQL("CREATE TABLE sync_queue(singleton INTEGER PRIMARY KEY CHECK(singleton=1), pending TEXT, conflict TEXT)")
+    }
+    fun webVersion(): Long = readableDatabase.rawQuery("SELECT version FROM web_list WHERE singleton=1", null).use { if(it.moveToFirst()) it.getLong(0) else 0 }
+    fun webSummary(): JSONObject? = readableDatabase.rawQuery("SELECT summary FROM web_list WHERE singleton=1", null).use { if(it.moveToFirst()) JSONObject(it.getString(0)) else null }
+    fun resetWebVersion() { writableDatabase.delete("web_list", null, null);writableDatabase.delete("sync_queue",null,null) }
+    fun restartWebReceipt() { writableDatabase.execSQL("UPDATE web_list SET version=0") }
+    fun applyWebList(version: Long, definitions: List<Definition>, summary: JSONObject): Boolean {
+        require(version > 0 && definitions.size <= 30 && definitions.map { it.id }.toSet().size == definitions.size)
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            if(version <= webVersion()) return false
+            db.delete("definitions", null, null)
+            definitions.forEach { saveDefinition(it) }
+            db.execSQL("UPDATE deliveries SET state='CANCELLED' WHERE kind IN ('REMINDER','BRIEFING') AND state IN ('PENDING','WAITING_SESSION','CLAIMED')")
+            db.insertWithOnConflict("web_list", null, ContentValues().apply {
+                put("singleton", 1); put("version", version); put("summary", summary.toString())
+            }, SQLiteDatabase.CONFLICT_REPLACE)
+            db.setTransactionSuccessful()
+            return true
+        } finally { db.endTransaction() }
+    }
     fun recoverAfterProcessLoss() {
         writableDatabase.execSQL("UPDATE deliveries SET state='DELIVERY_UNKNOWN', error='process_lost_during_dispatch' WHERE state='DISPATCHING'")
         writableDatabase.execSQL("UPDATE deliveries SET state='PENDING' WHERE state='CLAIMED'")
@@ -159,7 +192,7 @@ class BotDb(context: Context, name: String = "bot.db") : SQLiteOpenHelper(contex
     }
     fun clearAll() {
         val db = writableDatabase; db.beginTransaction()
-        try { listOf("deliveries", "definitions", "observed", "records").forEach { db.delete(it, null, null) }; db.setTransactionSuccessful() }
+        try { listOf("deliveries", "definitions", "observed", "records", "web_list", "sync_queue").forEach { db.delete(it, null, null) }; db.setTransactionSuccessful() }
         finally { db.endTransaction() }
         db.execSQL("VACUUM")
     }
