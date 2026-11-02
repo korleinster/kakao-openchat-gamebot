@@ -34,7 +34,10 @@ class MainActivity : ComponentActivity() {
     private var pairingConfirm: Button? = null
     private var renderedRoom: String? = null
     private var renderedAccess = ""
-    private fun accessSnapshot() = "${owner.consentAccepted()}|${owner.notificationAccessGranted()}|${owner.exactAllowed()}"
+    private fun accessSnapshot(): String {
+        val room=owner.selectedOrNull
+        return "${owner.consentAccepted()}|${owner.notificationAccessGranted()}|${owner.exactAllowed()}|${room?.prefs?.webStatus}|${room?.prefs?.webToken?.isNotBlank()}|${room?.db?.webVersion()}"
+    }
     private val changed: () -> Unit = { handler.post { refreshStatus() } }
     private val ticker = object : Runnable { override fun run() { refreshStatus(); handler.postDelayed(this, 1000) } }
     private val dark get() = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
@@ -79,7 +82,7 @@ class MainActivity : ComponentActivity() {
         })
     }
     override fun onSaveInstanceState(outState:Bundle) { outState.putString("screen",screen);super.onSaveInstanceState(outState) }
-    override fun onResume() { super.onResume();owner.addStatusListener(changed);handler.post(ticker);owner.submit { owner.requestListenerConnection();owner.tick() } }
+    override fun onResume() { super.onResume();owner.addStatusListener(changed);handler.post(ticker);owner.submit { owner.requestListenerConnection();owner.tick();owner.rooms().forEach { ListDelivery.sync(it) } } }
     override fun onPause() { owner.removeStatusListener(changed);handler.removeCallbacks(ticker);super.onPause() }
     override fun onDestroy() { owner.removeStatusListener(changed);handler.removeCallbacksAndMessages(null);super.onDestroy() }
     private fun render() {
@@ -209,19 +212,42 @@ class MainActivity : ComponentActivity() {
         text(page,"알림",27f,true)
         val room=owner.selectedOrNull ?: run { val c=card();text(c,"채팅방을 먼저 연결해 주세요.",18f,true);button(c,"채팅방 연결",true) { showRoomDialog() };return }
         button(page,"${room.prefs.targetRoom}  ▾",tagValue="select-room") { chooseRoom() }
+        val renderBase=room.db.webVersion()
+        val web=card();text(web,"웹 동기화 · 선택 기능",19f,true)
+        text(web,"연동할 서버를 직접 선택해요. 연결하면 앱과 웹에서 저장한 알림 목록·아침 요약이 서로 반영돼요. 백그라운드 확인은 약 15분 간격이며 절전 중에는 늦을 수 있어요.",14f,muted=true)
+        text(web,room.prefs.webStatus,14f)
+        if(room.prefs.webToken.isBlank() || room.prefs.webServer.isBlank()) button(web,"서버 연결",true) { webConnectionForm(room) }
+        else {
+            text(web,"서버 · ${room.prefs.webServer}\n방 코드 · ${room.prefs.webRoomKey} / 확인 버전 · ${room.db.webVersion()}",14f,muted=true)
+            if(room.db.syncPending()!=null) text(web,"서버에 아직 반영되지 않은 앱 변경이 있어요. 기기 안에 보관 중이에요.",14f)
+            button(web,"지금 동기화",true) { ListDelivery.sync(room) }
+            if(room.db.syncConflict()!=null) {
+                text(web,"동시 수정된 목록이 있어요. 앱 변경과 서버 변경 중 어떤 목록을 사용할지 선택하세요.",15f,true)
+                val remote=room.db.syncConflict()!!.getJSONObject("list")
+                val rows=remote.getJSONArray("definitions")
+                text(web,"앱 목록 · ${room.db.definitions().joinToString { it.name }.ifBlank { "알림 없음" }}",14f)
+                text(web,"서버 목록 · ${(0 until rows.length()).joinToString { rows.getJSONObject(it).getString("name") }.ifBlank { "알림 없음" }}",14f)
+                text(web,"서버 아침 요약 · ${remote.getJSONObject("summary").getString("time")}",14f,muted=true)
+                button(web,"서버 목록 사용") { confirm("서버 목록 사용","아직 전송되지 않은 앱 변경을 서버 목록으로 바꿀까요?") { update(room) { it.db.resolveRemote();it.changedSettings();ListDelivery.sync(it) } } }
+                button(web,"앱 목록 사용") { confirm("앱 목록 사용","앱의 현재 목록으로 서버 목록을 바꿀까요? 이후 다른 곳에서 또 수정됐다면 다시 확인해요.") { update(room) { it.db.resolveLocal();ListDelivery.sync(it) } } }
+            }
+            button(web,"서버 연결 해제") { confirm("동기화 연결 해제","현재 앱 목록과 미전송 변경은 기기에 남고 더 이상 서버와 주고받지 않아요. 연결을 해제할까요?") { update(room) { ListDelivery.disconnect(it) } } }
+        }
         val controls=card();text(controls,"예약 알림 발송",19f,true)
         text(controls,"기능 선택과 별도로 발송을 켜야 알림을 보내요. 이 방의 봇 사용도 켜져 있어야 해요.",14f,muted=true)
         toggle(controls,"예약 알림 발송",room.prefs.scheduleEnabled) { enabled ->
             when {
                 enabled && !owner.consentAccepted() -> { showConsent();render() }
-                enabled && !FeaturePolicy.hasAlerts(room.prefs.features) -> { toast("방 설정에서 알림 기능을 먼저 선택해 주세요.");render() }
+                enabled && !FeaturePolicy.hasAlerts(room.prefs.features) && room.db.webSummary()?.optBoolean("enabled") != true -> { toast("방 설정에서 알림 기능을 먼저 선택해 주세요.");render() }
                 enabled && !owner.exactAllowed() -> { requestExactAccess();render() }
                 else -> update(room) { it.prefs.scheduleEnabled=enabled;it.changedSettings() }
             }
         }.tag="scheduled-sending"
-        if(BotFeature.DAILY_SUMMARY in room.prefs.features) {
-            button(controls,"아침 요약 시각 · ${room.prefs.summaryTime}") { timePicker(room.prefs.summaryTime) { time -> update(room) { it.prefs.summaryTime=time;it.changedSettings() } } }
-            toggle(controls,"일정이 없는 날도 요약 보내기",room.prefs.sendEmpty) { selected -> update(room) { it.prefs.sendEmpty=selected;it.changedSettings() } }
+        if(BotFeature.DAILY_SUMMARY in room.prefs.features || room.prefs.webToken.isNotBlank()) {
+            val summary=room.currentReminderList().getJSONObject("summary")
+            if(room.prefs.webToken.isNotBlank()) toggle(controls,"아침 요약 사용",summary.getBoolean("enabled")) { value -> updateSummary(room,"enabled",value,renderBase) }
+            button(controls,"아침 요약 시각 · ${summary.getString("time")}") { timePicker(LocalTime.parse(summary.getString("time"))) { value -> updateSummary(room,"time",value.toString(),renderBase) } }
+            toggle(controls,"일정이 없는 날도 요약 보내기",summary.getBoolean("sendEmpty")) { value -> updateSummary(room,"sendEmpty",value,renderBase) }
         }
         button(page,"알림 만들기",true,"add-reminder") {
             AlertDialog.Builder(this).setTitle("알림 방식").setItems(arrayOf("반복 알림 · 요일과 시각","주기 알림 · 몇 개월마다")) { _,which -> reminderForm(room,null,which==1) }.setNegativeButton("취소",null).show()
@@ -232,14 +258,37 @@ class MainActivity : ComponentActivity() {
             val c=card();text(c,d.name,19f,true);text(c,if(d.isMonthly) "주기 알림 · ${d.intervalMonths}개월마다\n기준 ${d.anchor?.format(DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm"))} · ${d.noticeDays}일 전 안내" else "반복 알림 · ${d.weekdays.sortedBy { it.value }.joinToString(" · ") { dayLabel(it) }}\n${d.time} · ${d.leadMinutes}분 전 안내",14f,muted=true)
             val feature=if(d.isMonthly) BotFeature.CYCLE_REMINDERS else BotFeature.REPEATING_REMINDERS
             if(feature !in room.prefs.features) text(c,"이 방에서 ${feature.label} 기능이 꺼져 있어요.",13f,muted=true)
-            toggle(c,"이 알림 사용",d.enabled) { enabled -> update(room) { it.db.saveDefinition(d.copy(enabled=enabled,revision=d.revision+1));it.changedSettings() } }
+            toggle(c,"이 알림 사용",d.enabled) { enabled -> update(room) { it.editReminderList(renderBase) { it.db.saveDefinition(d.copy(enabled=enabled,revision=d.revision+1)) } } }
             val row=layout(c,true)
             button(row,"수정") { reminderForm(room,d,d.isMonthly) }.layoutParams=LinearLayout.LayoutParams(0,-2,1f).apply { rightMargin=dp(6);topMargin=dp(8) }
-            button(row,"삭제") { confirm("알림 삭제","‘${d.name}’ 알림을 삭제할까요?") { update(room) { it.db.removeDefinition(d.id);it.tick() } } }.layoutParams=LinearLayout.LayoutParams(0,-2,1f).apply { leftMargin=dp(6);topMargin=dp(8) }
+            button(row,"삭제") { confirm("알림 삭제","‘${d.name}’ 알림을 삭제할까요?") { update(room) { it.editReminderList(renderBase) { it.db.removeDefinition(d.id) } } } }.layoutParams=LinearLayout.LayoutParams(0,-2,1f).apply { leftMargin=dp(6);topMargin=dp(8) }
         }
         text(page,"시각은 한국 시간 기준이에요. 메신저 알림·절전 설정에 따라 늦거나 도착하지 않을 수 있어요.",13f,muted=true)
     }
     private fun dayLabel(day:DayOfWeek)=listOf("월","화","수","목","금","토","일")[day.value-1]
+    private fun updateSummary(room:BotEngine,key:String,value:Any,baseVersion:Long) {
+        update(room) { engine -> engine.editReminderList(baseVersion) {
+            val summary=engine.currentReminderList().getJSONObject("summary").put(key,value)
+            if(engine.prefs.webToken.isNotBlank()) engine.db.setLocalSummary(summary)
+            else { engine.prefs.summaryTime=LocalTime.parse(summary.getString("time"));engine.prefs.sendEmpty=summary.getBoolean("sendEmpty") }
+        } }
+    }
+    private fun webConnectionForm(room:BotEngine) {
+        if(!owner.consentAccepted()) {showConsent();return}
+        val f=form()
+        text(f,"알림 일정과 요약 설정을 선택한 서버와 양방향으로 주고받아요. 대화 원문·대화 식별자·발송 기록은 전송하지 않아요. 양쪽에 다른 목록이 있으면 연결 후 사용할 목록을 선택해요.",14f)
+        val server=field(f,"서버 HTTPS 주소",room.prefs.webServer).apply {hint="https://sync.example.org";inputType=InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI}
+        val key=field(f,"방 코드",room.prefs.webRoomKey).apply {hint="방 코드 입력"}
+        val password=field(f,"방 비밀번호").apply { hint="비밀번호 입력";inputType=InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD }
+        val scroll=ScrollView(this).apply { addView(f) }
+        val dialog=AlertDialog.Builder(this).setTitle("선택한 서버에 연결").setView(scroll).setPositiveButton("동의하고 연결",null).setNegativeButton("취소",null).create()
+        dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            val base=runCatching {SyncEndpoint.normalize(server.text.toString())}.getOrElse {toast("사용자 정보·쿼리가 없는 HTTPS 서버 주소를 입력해 주세요.");return@setOnClickListener}
+            val code=key.text.toString().trim();val secret=password.text.toString()
+            if(!code.matches(Regex("[a-z0-9][a-z0-9-]{2,39}")) || secret.length !in 8..64) { toast("방 코드와 8~64자 비밀번호를 확인해 주세요.");return@setOnClickListener }
+            ListDelivery.connect(room,base,code,secret);password.text.clear();dialog.dismiss();render()
+        } };dialog.show()
+    }
     private fun timePicker(initial:LocalTime,save:(LocalTime)->Unit) { TimePickerDialog(this,{_,h,m->save(LocalTime.of(h,m))},initial.hour,initial.minute,true).show() }
     private fun form()=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL;setPadding(dp(22),dp(8),dp(22),dp(12)) }
     private fun field(parent:LinearLayout,hint:String,value:String="",numeric:Boolean=false):EditText {
@@ -253,6 +302,7 @@ class MainActivity : ComponentActivity() {
         }
     }
     private fun reminderForm(room:BotEngine,existing:Definition?,monthly:Boolean) {
+        val editBase=room.db.webVersion()
         val form=form();val scroll=ScrollView(this).apply { addView(form) }
         val name=field(form,"알림 이름",existing?.name ?: "")
         var time=existing?.anchor?.toLocalTime() ?: existing?.time ?: LocalTime.of(18,0)
@@ -284,7 +334,7 @@ class MainActivity : ComponentActivity() {
                 val d=Definition(existing?.id ?: UUID.randomUUID().toString(),title,if(monthly) "monthly" else "weekly",time,selectedDays,
                     if(monthly) date.atTime(time) else null,months?.text?.toString()?.toLong() ?: 0,noticeDays?.text?.toString()?.toLong() ?: 0,
                     existing?.enabled ?: true,(existing?.revision ?: 0)+1,lead?.text?.toString()?.toLong() ?: 5)
-                update(room) { it.db.saveDefinition(d);it.changedSettings() };dialog.dismiss()
+                update(room) { it.editReminderList(editBase) { it.db.saveDefinition(d) } };dialog.dismiss()
             } catch(_:Exception) { toast("이름·요일·숫자 범위를 확인해 주세요. 방마다 최대 30개 알림을 등록할 수 있어요.") }
         } };dialog.show()
     }

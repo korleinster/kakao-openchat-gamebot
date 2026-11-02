@@ -15,6 +15,7 @@ signing.properties
 # Build and editor outputs
 .gradle/
 .kotlin/
+.pnpm-store/
 .idea/
 **/build/
 *.apk
@@ -24,3 +25,9 @@ signing.properties
 # Python helper caches
 __pycache__/
 *.pyc
+
+# Personal website adapters and operations records must never be published
+distribution/*-games-*.patch
+distribution/*-games-base.txt
+
+config/project.json

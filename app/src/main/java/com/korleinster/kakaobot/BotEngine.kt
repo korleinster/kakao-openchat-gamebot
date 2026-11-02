@@ -40,7 +40,7 @@ class BotEngine private constructor(private val context: Application, val roomId
     private val executor: java.util.concurrent.ExecutorService = coordinator?.executor ?: Executors.newSingleThreadExecutor()
     private val alarm = context.getSystemService(AlarmManager::class.java)
     private val alarmIntent: PendingIntent get() = PendingIntent.getBroadcast(context, 1, Intent(context, AlarmReceiver::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-    init { db.recoverAfterProcessLoss(); if(coordinator == null) submit { tick() } }
+    init { db.recoverAfterProcessLoss(); if(coordinator == null) { ListDelivery.schedule(context); submit { tick() } } }
     fun submit(block: () -> Unit) { executor.execute { try { block() } catch (_: Exception) { db.log("작업 오류 · 개인정보 미기록"); report() } } }
     fun exactAllowed(): Boolean = Build.VERSION.SDK_INT < 31 || alarm.canScheduleExactAlarms()
     fun addStatusListener(listener: () -> Unit) { root.statusListeners.add(listener) }
@@ -80,10 +80,11 @@ class BotEngine private constructor(private val context: Application, val roomId
         root.consent.accept(); requestListenerConnection(); NotificationBridge.refreshCurrent(); tick()
     }
     fun revokeConsent() {
-        root.consent.revoke(); clearReplyCapabilities(); root.alarm.cancel(root.alarmIntent); report()
+        root.consent.revoke(); rooms().forEach { ListDelivery.cancel(it) }; clearReplyCapabilities(); root.alarm.cancel(root.alarmIntent); report()
     }
     fun removeRoom(id: String) {
         val target = rooms().firstOrNull { it.roomId == id } ?: return
+        ListDelivery.cancel(target)
         target.prefs.running = false; target.db.cancelAll(); target.transport.clear()
         target.db.clearAll(); target.prefs.clear(); root.directory.remove(id)
         if(id != "legacy") { root.roomEngines.remove(id)?.db?.close(); context.deleteDatabase("room-$id.db") }
@@ -147,7 +148,7 @@ class BotEngine private constructor(private val context: Application, val roomId
             (!cycleOnly || d.isMonthly) &&
             (command != "!월보" || d.category == "world_boss") && (command != "!정기" || !d.isMonthly)
         }
-        if(defs.isEmpty()) return "등록된 알림이 없어요. 앱의 알림 탭에서 추가할 수 있어요."
+        if(defs.isEmpty()) return "등록된 알림이 없어요. 앱이나 연결한 웹에서 알림을 추가할 수 있어요."
         val today = now.atZone(APP_ZONE).toLocalDate()
         val events = Planner.occurrences(defs, now).filter { it.start >= now && (cycleOnly || it.start.atZone(APP_ZONE).toLocalDate() == today) }.take(15)
         return if(events.isEmpty()) "오늘 남은 알림이 없어요." else "[등록 알림 · 한국 시간]\n" + events.joinToString("\n") { "${it.start.atZone(APP_ZONE).toLocalDate()} ${it.start.atZone(APP_ZONE).toLocalTime()} ${it.source.name}" }
@@ -174,9 +175,13 @@ class BotEngine private constructor(private val context: Application, val roomId
         db.expire(now); db.prune(now)
         if(!consentAccepted()) return
         val defs = db.definitions()
-        val planned = if(prefs.running && prefs.scheduleEnabled && FeaturePolicy.hasAlerts(prefs.features) && prefs.bound.isNotBlank())
-            Planner.plan(defs, now, BotFeature.DAILY_SUMMARY in prefs.features, prefs.sendEmpty, prefs.summaryTime).filter { n ->
-                if(n.kind == "BRIEFING") BotFeature.DAILY_SUMMARY in prefs.features
+        val webSummary = db.webSummary()
+        val summaryEnabled = webSummary?.getBoolean("enabled") ?: (BotFeature.DAILY_SUMMARY in prefs.features)
+        val summaryTime = webSummary?.getString("time")?.let { java.time.LocalTime.parse(it) } ?: prefs.summaryTime
+        val sendEmpty = webSummary?.getBoolean("sendEmpty") ?: prefs.sendEmpty
+        val planned = if(prefs.running && prefs.scheduleEnabled && (FeaturePolicy.hasAlerts(prefs.features) || summaryEnabled) && prefs.bound.isNotBlank())
+            Planner.plan(defs, now, summaryEnabled, sendEmpty, summaryTime).filter { n ->
+                if(n.kind == "BRIEFING") summaryEnabled
                 else defs.firstOrNull { it.id == n.sourceId }?.let { if(it.isMonthly) BotFeature.CYCLE_REMINDERS in prefs.features else BotFeature.REPEATING_REMINDERS in prefs.features } == true
             }.map { it.copy(id="${prefs.bound.take(16)}:${it.id}") }
             else emptyList()

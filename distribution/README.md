@@ -1,5 +1,7 @@
 # Store preparation assets
 
+## Store assets for 0.3.0
+
 These materials describe Chatbot (채팅봇) version 0.3.0. They have not been submitted to or approved by Google Play.
 
 | Asset | File | Format |
@@ -14,4 +16,4 @@ Screenshots are direct captures of the actual app on an Android 16/API 36 emulat
 
 The original vector icon and feature graphic are project-authored assets covered by the repository's MIT license. The source icon is included as SVG. No third-party messenger logo is used. Text in the feature graphic uses the system Korean font; the font file is not redistributed.
 
-Before submission, supply the owner's public support email, sign the release AAB with a protected upload key, complete Console declarations and reviewer access information, and finish required account testing and outstanding real-device checks. See [release preparation](../docs/13-play-release.md) and the [official graphic requirements](https://support.google.com/googleplay/android-developer/answer/9866151?hl=en).
+Before submission, supply the owner's public support email, sign the release AAB with a protected upload key, complete Console declarations and reviewer access information, and finish required account testing and outstanding real-device checks. See [release preparation](../docs/release-preparation.md) and the [official graphic requirements](https://support.google.com/googleplay/android-developer/answer/9866151?hl=en).
